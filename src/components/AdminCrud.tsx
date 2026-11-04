@@ -1,0 +1,524 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Question, Category, FinalEvaluation } from '../types/game';
+import { saveQuestion, deleteQuestion, resetQuestionsToDefault, getEvaluations } from '../lib/storage';
+import { Plus, Edit2, Trash2, RotateCcw, X, Check, BookOpen, Users, Award, Shield } from 'lucide-react';
+
+interface AdminCrudProps {
+  questions: Question[];
+  onQuestionsUpdated: (updated: Question[]) => void;
+  onClose: () => void;
+}
+
+export const AdminCrud: React.FC<AdminCrudProps> = ({
+  questions,
+  onQuestionsUpdated,
+  onClose,
+}) => {
+  const [activeTab, setActiveTab] = useState<'QUESTIONS' | 'EVALUATIONS'>('QUESTIONS');
+  const [selectedLevelFilter, setSelectedLevelFilter] = useState<number | 'ALL'>('ALL');
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+
+  // Form State for Create / Edit
+  const [formData, setFormData] = useState<Question>({
+    id: '',
+    category: 'CONCENTRACAO',
+    levelNumber: 1,
+    difficulty: 'FACIL',
+    title: '',
+    scenario: '',
+    documentType: 'RELATORIO',
+    prompt: '',
+    normReference: '',
+    didacticTip: '',
+    points: 200,
+    options: [
+      { id: 'opt-1', text: '', isCorrect: true, explanation: '' },
+      { id: 'opt-2', text: '', isCorrect: false, explanation: '' },
+      { id: 'opt-3', text: '', isCorrect: false, explanation: '' },
+    ],
+  });
+
+  const [evaluations, setEvaluations] = useState<FinalEvaluation[]>([]);
+
+  useEffect(() => {
+    const local = getEvaluations();
+    setEvaluations(local);
+
+    // Merge evaluations from backend serverless API
+    fetch('/api/evaluations')
+      .then(res => res.json())
+      .then((serverData: FinalEvaluation[]) => {
+        if (Array.isArray(serverData) && serverData.length > 0) {
+          const map = new Map<string, FinalEvaluation>();
+          [...serverData, ...local].forEach(item => map.set(item.id, item));
+          setEvaluations(Array.from(map.values()));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleStartCreate = () => {
+    setFormData({
+      id: 'custom-' + Date.now(),
+      category: 'CONCENTRACAO',
+      levelNumber: 1,
+      difficulty: 'FACIL',
+      title: '',
+      scenario: '',
+      documentType: 'RELATORIO',
+      prompt: '',
+      normReference: 'Livro Auditoria Contábil (Prof. Crepaldi) — Item 4.10',
+      didacticTip: '',
+      points: 200,
+      options: [
+        { id: 'opt-1', text: 'Opção correta com base na norma', isCorrect: true, explanation: 'Explicação didática da conformidade técnica.' },
+        { id: 'opt-2', text: 'Opção incorreta comum de mercado', isCorrect: false, explanation: 'Explicação do porquê está em desacordo com as normas de auditoria.' },
+        { id: 'opt-3', text: 'Outra alternativa incorreta', isCorrect: false, explanation: 'Justificativa da improcedência.' },
+      ],
+    });
+    setIsCreatingNew(true);
+    setEditingQuestion(null);
+  };
+
+  const handleStartEdit = (q: Question) => {
+    setFormData(JSON.parse(JSON.stringify(q)));
+    setEditingQuestion(q);
+    setIsCreatingNew(false);
+  };
+
+  const handleDelete = (id: string) => {
+    if (id.startsWith('q-410-')) {
+      alert('Esta é uma questão essencial da campanha oficial (Item 4.10) e é exigida para abrir as portas do jogo. Ela não pode ser excluída.');
+      return;
+    }
+    if (confirm('Tem certeza que deseja excluir esta questão investigativa?')) {
+      const updated = deleteQuestion(id);
+      onQuestionsUpdated(updated);
+    }
+  };
+
+  const handleResetDefaults = () => {
+    if (confirm('Restaurar banco original de questões de auditoria do Item 4.10?')) {
+      const updated = resetQuestionsToDefault();
+      onQuestionsUpdated(updated);
+    }
+  };
+
+  const handleSaveForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title || !formData.prompt) {
+      alert('Preencha pelo menos o título e o enunciado da questão.');
+      return;
+    }
+    const updated = saveQuestion(formData);
+    onQuestionsUpdated(updated);
+    setIsCreatingNew(false);
+    setEditingQuestion(null);
+  };
+
+  const filteredQuestions = questions.filter(q => {
+    if (selectedLevelFilter !== 'ALL' && q.levelNumber !== selectedLevelFilter) return false;
+    return true;
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+      <div className="relative w-full max-w-4xl bg-slate-900 border-4 border-slate-700 rounded-xl shadow-pixel overflow-hidden flex flex-col max-h-[92vh]">
+        {/* Top Header */}
+        <div className="bg-slate-800 border-b-2 border-slate-700 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Shield className="w-6 h-6 text-amber-400" />
+            <div>
+              <h2 className="font-pixel text-sm text-white">PAINEL DO PROFESSOR / FISCAL CHEFE</h2>
+              <div className="text-xs font-mono text-slate-400">
+                Gerenciamento de Casos Investigativos & Relatórios de Alunos
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="bg-slate-950 px-6 py-2 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setActiveTab('QUESTIONS'); setIsCreatingNew(false); setEditingQuestion(null); }}
+              className={`px-4 py-2 rounded text-xs font-pixel transition flex items-center gap-2 ${
+                activeTab === 'QUESTIONS' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>CRUD Questões ({questions.length})</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab('EVALUATIONS'); setIsCreatingNew(false); setEditingQuestion(null); }}
+              className={`px-4 py-2 rounded text-xs font-pixel transition flex items-center gap-2 ${
+                activeTab === 'EVALUATIONS' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Relatórios dos Alunos ({evaluations.length})</span>
+            </button>
+          </div>
+
+          {activeTab === 'QUESTIONS' && !isCreatingNew && !editingQuestion && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleStartCreate}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-mono font-bold flex items-center gap-1.5 transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nova Questão</span>
+              </button>
+              <button
+                onClick={handleResetDefaults}
+                title="Restaurar padrão"
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-1.5 rounded transition"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Content Body */}
+        <div className="p-6 overflow-y-auto flex-1 min-h-0">
+          {/* TAB 1: QUESTIONS CRUD */}
+          {activeTab === 'QUESTIONS' && (
+            <div>
+              {/* Form Mode (Create / Edit) */}
+              {(isCreatingNew || editingQuestion) ? (
+                <form onSubmit={handleSaveForm} className="space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="font-pixel text-xs text-amber-400">
+                      {isCreatingNew ? 'CRIAR NOVO CASO INVESTIGATIVO' : `EDITAR QUESTÃO: ${formData.id}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreatingNew(false); setEditingQuestion(null); }}
+                      className="text-slate-400 hover:text-white text-xs font-mono"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1">Piso / Nível:</label>
+                      <select
+                        value={formData.levelNumber}
+                        onChange={e => {
+                          const lvl = Number(e.target.value);
+                          const catMap: Record<number, Category> = {
+                            1: 'CONCENTRACAO',
+                            2: 'DIVULGACAO',
+                            3: 'RESISTENCIA_RISCO',
+                          };
+                          const diffMap: Record<number, 'FACIL' | 'MEDIO' | 'DIFICIL'> = {
+                            1: 'FACIL',
+                            2: 'MEDIO',
+                            3: 'DIFICIL',
+                          };
+                          setFormData({ 
+                            ...formData, 
+                            levelNumber: lvl, 
+                            category: catMap[lvl] || 'CONCENTRACAO',
+                            difficulty: diffMap[lvl] || 'FACIL'
+                          });
+                        }}
+                        className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
+                      >
+                        <option value={1}>Nível 1: Concentração Big Four (Fácil)</option>
+                        <option value={2}>Nível 2: As 4 Áreas de Divulgação (Médio)</option>
+                        <option value={3}>Nível 3: Resistência & Risco (Difícil)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1">Tipo de Documento:</label>
+                      <select
+                        value={formData.documentType}
+                        onChange={e => setFormData({ ...formData, documentType: e.target.value as Question['documentType'] })}
+                        className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
+                      >
+                        <option value="RELATORIO">Relatório</option>
+                        <option value="EMAIL">E-mail</option>
+                        <option value="PLANILHA">Planilha</option>
+                        <option value="CONTRATO">Contrato</option>
+                        <option value="PARECER">Parecer</option>
+                        <option value="DEPOIMENTO">Depoimento</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1">Pontos:</label>
+                      <input
+                        type="number"
+                        value={formData.points}
+                        onChange={e => setFormData({ ...formData, points: Number(e.target.value) })}
+                        className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1">Título do Caso:</label>
+                    <input
+                      type="text"
+                      value={formData.title}
+                      onChange={e => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="Ex: Conflito de Interesses na Construtora Alfa"
+                      className="w-full bg-slate-800 border border-slate-700 text-white p-2.5 rounded text-sm font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1">Cenário / Documento Encontrado:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.scenario}
+                      onChange={e => setFormData({ ...formData, scenario: e.target.value })}
+                      placeholder="Descreva o documento ou evidência encontrada na mesa/computador..."
+                      className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-slate-400 mb-1">Pergunta Investigativa (Prompt):</label>
+                    <input
+                      type="text"
+                      value={formData.prompt}
+                      onChange={e => setFormData({ ...formData, prompt: e.target.value })}
+                      placeholder="Qual norma ou princípio contábil foi violado nesta situação?"
+                      className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1">Referência Normativa (NBC / CVM):</label>
+                      <input
+                        type="text"
+                        value={formData.normReference}
+                        onChange={e => setFormData({ ...formData, normReference: e.target.value })}
+                        placeholder="Ex: NBC PA 11 item 4 / Resolução CVM nº 23"
+                        className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-slate-400 mb-1">Dica Didática:</label>
+                      <input
+                        type="text"
+                        value={formData.didacticTip}
+                        onChange={e => setFormData({ ...formData, didacticTip: e.target.value })}
+                        placeholder="Ex: Lembre-se que o limite de permanência é de 5 anos."
+                        className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Options */}
+                  <div className="space-y-3 pt-2">
+                    <label className="block text-xs font-mono font-bold text-amber-300">
+                      Alternativas (Marque o rádio para a correta):
+                    </label>
+                    {formData.options.map((opt, i) => (
+                      <div key={opt.id} className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="correctOption"
+                            checked={opt.isCorrect}
+                            onChange={() => {
+                              const updatedOpts = formData.options.map((o, idx) => ({
+                                ...o,
+                                isCorrect: idx === i,
+                              }));
+                              setFormData({ ...formData, options: updatedOpts });
+                            }}
+                            className="w-4 h-4 accent-amber-500 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold font-mono text-slate-300">Alternativa {String.fromCharCode(65 + i)}:</span>
+                          <input
+                            type="text"
+                            value={opt.text}
+                            onChange={e => {
+                              const updatedOpts = [...formData.options];
+                              updatedOpts[i].text = e.target.value;
+                              setFormData({ ...formData, options: updatedOpts });
+                            }}
+                            placeholder="Texto da alternativa..."
+                            className="flex-1 bg-slate-800 border border-slate-700 text-white p-1.5 rounded text-xs font-mono"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={opt.explanation}
+                          onChange={e => {
+                            const updatedOpts = [...formData.options];
+                            updatedOpts[i].explanation = e.target.value;
+                            setFormData({ ...formData, options: updatedOpts });
+                          }}
+                          placeholder="Explicação didática que aparecerá após o estudante responder..."
+                          className="w-full bg-slate-900 border border-slate-700 text-slate-300 p-1.5 rounded text-[11px] font-mono"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreatingNew(false); setEditingQuestion(null); }}
+                      className="px-4 py-2 text-xs font-mono text-slate-400 hover:text-white"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2 rounded text-xs font-pixel shadow-pixel transition"
+                    >
+                      Salvar Questão
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* List Mode */
+                <div className="space-y-4">
+                  {/* Filter by Level */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono">
+                    <span className="text-slate-500">Filtrar:</span>
+                    {[
+                      { val: 'ALL', label: 'Todos (Tema 4.10)' },
+                      { val: 1, label: '1. Concentração' },
+                      { val: 2, label: '2. Divulgação' },
+                      { val: 3, label: '3. Resistência/Risco' },
+                    ].map(f => (
+                      <button
+                        key={String(f.val)}
+                        onClick={() => setSelectedLevelFilter(f.val as number | 'ALL')}
+                        className={`px-2.5 py-1 rounded transition ${
+                          selectedLevelFilter === f.val
+                            ? 'bg-amber-500 text-slate-950 font-bold'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Questions Table */}
+                  <div className="space-y-2">
+                    {filteredQuestions.map(q => (
+                      <div
+                        key={q.id}
+                        className="bg-slate-800/80 p-3.5 rounded-lg border border-slate-700 flex items-start justify-between gap-4 hover:border-slate-600 transition"
+                      >
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-slate-950 text-amber-400 text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700 font-bold">
+                              NÍVEL {q.levelNumber}
+                            </span>
+                            <span className="font-bold text-white text-sm">{q.title}</span>
+                            <span className="text-xs text-emerald-400 font-mono">+{q.points} pts</span>
+                          </div>
+                          <p className="text-xs text-slate-300 font-mono line-clamp-1">{q.prompt}</p>
+                          <div className="text-[11px] font-mono text-slate-400">
+                            Norma: <span className="text-amber-300">{q.normReference}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleStartEdit(q)}
+                            title="Editar"
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded transition"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(q.id)}
+                            title="Excluir"
+                            className="bg-rose-950 hover:bg-rose-900 text-rose-300 p-2 rounded transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: STUDENT EVALUATIONS */}
+          {activeTab === 'EVALUATIONS' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center text-xs font-mono text-slate-400 pb-2 border-b border-slate-800">
+                <span>Histórico de Fiscalizações Concluídas pelos Estudantes:</span>
+                <span>{evaluations.length} relatório(s) arquivado(s)</span>
+              </div>
+
+              {evaluations.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 font-mono text-sm">
+                  Nenhum aluno submeteu o relatório final ainda. Ao concluir a partida, as fiscalizações aparecerão aqui!
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {evaluations.map(ev => (
+                    <div key={ev.id} className="bg-slate-800/90 border border-slate-700 p-4 rounded-lg space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-white text-sm flex items-center gap-2">
+                            <span>{ev.userName}</span>
+                            <span className="text-xs font-pixel bg-amber-400 text-slate-950 px-2 py-0.5 rounded">
+                              {ev.rankTitle}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-400">
+                            {new Date(ev.submittedAt).toLocaleString('pt-BR')}
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-lg font-pixel text-emerald-400">{ev.totalScore} pts</div>
+                          <div className="text-xs font-mono text-amber-300">{ev.percentage}% acertos</div>
+                        </div>
+                      </div>
+
+                      <div className="text-xs font-mono bg-slate-950 p-2.5 rounded border border-slate-800 text-slate-300">
+                        <span className="font-bold text-amber-400">Sanção Reguladora Aplicada:</span> {ev.regulatoryDecision}
+                        <div className="mt-1 text-slate-400">{ev.studentRationale}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-slate-800 border-t border-slate-700 px-6 py-3 flex justify-between items-center text-xs font-mono text-slate-400">
+          <span>Audit Quest • Modo Docente / Fiscalizador</span>
+          <button
+            onClick={onClose}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-1.5 rounded font-pixel text-xs transition"
+          >
+            Voltar ao Jogo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
