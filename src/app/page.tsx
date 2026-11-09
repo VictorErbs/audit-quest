@@ -46,13 +46,15 @@ export default function HomePage() {
   const [showReport, setShowReport] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
 
-  async function load(currentUser?: UserProfile) {
+  async function load(currentUser?: UserProfile, openRanking = false) {
     setLoading(true);
     setError('');
     try {
       const profile = currentUser ?? (await getSession()).user;
       setUser(profile);
-      if (profile?.role === 'TEACHER') {
+      if (profile?.role === 'PRACTICE' && openRanking) {
+        setShowRanking(true);
+      } else if (profile?.role === 'TEACHER') {
         setQuestions(await getQuestions());
       } else if (profile) {
         const run = await getRun();
@@ -88,14 +90,14 @@ export default function HomePage() {
     </main>
   );
 
-  if (!user) return <LoginScreen onLoginSuccess={profile => void load(profile)} />;
+  if (!user) return <LoginScreen onLoginSuccess={(profile, openRanking) => void load(profile, openRanking)} />;
 
   if (user.role === 'TEACHER') return (
     <AdminCrud questions={questions} onQuestionsUpdated={setQuestions} onClose={() => void logout()} />
   );
 
   if (report && !showReport) return <Ranking finished onClose={() => void logout()} />;
-  if (!stats) return null;
+  if (!stats) return showRanking ? <Ranking onClose={() => void logout()} /> : null;
 
   const canSubmit = allCorrect(questions, stats.answers);
   const handleAnswer = async (option: QuestionOption) => {
@@ -120,7 +122,10 @@ export default function HomePage() {
         onTriggerQuestion={setActiveQuestion} onTriggerDialogue={setDialogue}
         onLevelComplete={nextLevel => {
           if (!allCorrect(questions.filter(q => q.levelNumber <= stats.currentLevel), stats.answers)) return;
-          if (nextLevel > 3) setShowReport(true);
+          if (nextLevel > 3) {
+            if (user.role === 'PRACTICE') setShowRanking(true);
+            else setShowReport(true);
+          }
           else setStats({ ...stats, currentLevel: nextLevel, completedLevels: Array.from(new Set([...stats.completedLevels, stats.currentLevel])) });
         }}
         onOpenDossier={() => setShowDossier(true)}
@@ -133,7 +138,7 @@ export default function HomePage() {
       {dialogue && <DialogueModal node={dialogue} onClose={() => setDialogue(null)} />}
       {showDossier && <EvidenceDossier stats={stats} questions={questions}
         onClose={() => setShowDossier(false)}
-        onOpenFinalReport={canSubmit ? () => { setShowDossier(false); setShowReport(true); } : undefined} />}
+        onOpenFinalReport={canSubmit ? () => { setShowDossier(false); if (user.role === 'PRACTICE') setShowRanking(true); else setShowReport(true); } : undefined} />}
       {showReport && canSubmit && <FinalReportModal stats={stats} questions={questions}
         onClose={() => setShowReport(false)} onSubmitted={setReport} />}
       {showRanking && <Ranking onClose={() => setShowRanking(false)} />}

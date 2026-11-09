@@ -41,7 +41,9 @@ enviar o parecer, o aluno pode consultar o ranking, mas não pode responder
 novamente. As 50 melhores notas aparecem para usuários autenticados. Em
 caso de empate, tem prioridade quem concluiu primeiro.
 
-O professor entra pela opção **Professor** e pode editar a campanha e
+Na aba **Professor**, basta informar o nome para jogar em modo de prática
+ou abrir o ranking geral. A prática não gera nota no ranking. O **Painel
+administrativo** exige o código de professor para editar a campanha e
 consultar os pareceres. Alterações nas perguntas só afetam partidas que
 ainda não registraram a primeira resposta. A correção, os pontos e o
 bloqueio de nova partida são aplicados no servidor. Para verificar as

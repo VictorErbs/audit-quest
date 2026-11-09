@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { clearSession, getSession, json, matches, setSession } from '@/lib/session';
 import { login, register } from '@/lib/accounts';
 
@@ -10,6 +11,11 @@ export async function POST(request: Request) {
     return json({ error: 'Envie credenciais em JSON.' }, 415);
   }
   const body = await request.json().catch(() => null);
+  if (body?.action === 'practice') {
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (name.length < 2 || name.length > 100) return json({ error: 'Informe um nome válido.' }, 400);
+    return setSession({ id: `practice-${randomUUID()}`, role: 'PRACTICE', name, email: '', createdAt: Date.now() });
+  }
   if (!body || typeof body.password !== 'string' || body.password.length > 128) {
     return json({ error: 'Credenciais inválidas.' }, 400);
   }

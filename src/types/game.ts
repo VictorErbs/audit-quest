@@ -53,7 +53,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  role: 'STUDENT' | 'TEACHER';
+  role: 'STUDENT' | 'TEACHER' | 'PRACTICE';
   createdAt: number;
 }
 
