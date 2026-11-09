@@ -1,17 +1,7 @@
 import { decisions, rankTitle, type Run } from '@/lib/campaign';
 import { getSession, json } from '@/lib/session';
-import { listReports, updateRecord } from '@/lib/serverStore';
+import { updateRecord } from '@/lib/serverStore';
 import type { FinalEvaluation } from '@/types/game';
-
-export async function GET(request: Request) {
-  if (getSession(request)?.role !== 'TEACHER') return json({ error: 'Acesso restrito a professores.' }, 403);
-  const cursor = new URL(request.url).searchParams.get('cursor') ?? undefined;
-  try {
-    return json(await listReports<FinalEvaluation>(cursor));
-  } catch {
-    return json({ error: 'Relatórios indisponíveis.' }, 503);
-  }
-}
 
 export async function POST(request: Request) {
   const user = getSession(request);

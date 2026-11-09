@@ -5,7 +5,7 @@ import { Shield } from 'lucide-react';
 import { postJson } from '../lib/storage';
 import type { UserProfile } from '../types/game';
 
-type Action = 'login' | 'register' | 'practice' | 'teacher';
+type Action = 'login' | 'register' | 'practice';
 
 export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: UserProfile, openRanking: boolean) => void }) {
   const [action, setAction] = useState<Action>('login');
@@ -54,9 +54,9 @@ export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: UserPro
             <label className="block text-sm">Nome<input className={field} name="name" autoComplete="name" minLength={2} maxLength={100} required /></label>
             {action === 'register' && <label className="block text-sm">E-mail<input className={field} name="email" type="email" autoComplete="email" maxLength={254} required /></label>}
           </>}
-          {action !== 'teacher' && action !== 'practice' && <label className="block text-sm">Matrícula<input className={field} name="registration" autoComplete="username" pattern="[A-Za-z0-9_\-]+" maxLength={64} required /></label>}
-          {action !== 'practice' && <label className="block text-sm">{action === 'teacher' ? 'Código do professor' : 'Senha'}
-            <input className={field} name="password" type="password" autoComplete={action === 'register' ? 'new-password' : 'current-password'} minLength={action === 'teacher' ? 16 : 10} maxLength={128} required />
+          {action !== 'practice' && <label className="block text-sm">Matrícula<input className={field} name="registration" autoComplete="username" pattern="[A-Za-z0-9_\-]+" maxLength={64} required /></label>}
+          {action !== 'practice' && <label className="block text-sm">Senha
+            <input className={field} name="password" type="password" autoComplete={action === 'register' ? 'new-password' : 'current-password'} minLength={10} maxLength={128} required />
           </label>}
           {action === 'register' && <p className="text-xs text-slate-300">Cada matrícula tem uma partida. Ao concluir, seu nome e sua pontuação aparecem no ranking para usuários logados.</p>}
           {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
@@ -69,12 +69,6 @@ export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: UserPro
             </button>
           )}
         </form>
-        {action === 'practice' && (
-          <button type="button" disabled={busy} className="text-xs text-slate-300 underline"
-            onClick={() => { setAction('teacher'); setError(''); }}>
-            Painel administrativo
-          </button>
-        )}
       </div>
     </main>
   );

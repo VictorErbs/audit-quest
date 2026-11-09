@@ -14,7 +14,7 @@ function hash(value: string) {
   return createHash('sha256').update(value).digest();
 }
 
-export function matches(value: string, expected: string | undefined) {
+function matches(value: string, expected: string | undefined) {
   return Boolean(expected && expected.length >= 16 && timingSafeEqual(hash(value), hash(expected)));
 }
 
@@ -32,7 +32,7 @@ export function getSession(request: Request): UserProfile | null {
   if (!matches(signature, expected)) return null;
   try {
     const { user, expires } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return expires > Date.now() ? user : null;
+    return expires > Date.now() && (user?.role === 'STUDENT' || user?.role === 'PRACTICE') ? user : null;
   } catch {
     return null;
   }

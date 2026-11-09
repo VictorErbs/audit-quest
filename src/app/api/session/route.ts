@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { clearSession, getSession, json, matches, setSession } from '@/lib/session';
+import { clearSession, getSession, json, setSession } from '@/lib/session';
 import { login, register } from '@/lib/accounts';
 
 export async function GET(request: Request) {
@@ -20,11 +20,6 @@ export async function POST(request: Request) {
     return json({ error: 'Credenciais inválidas.' }, 400);
   }
   try {
-    if (body.action === 'teacher') {
-      return matches(body.password, process.env.AUDIT_TEACHER_CODE)
-        ? setSession({ id: 'teacher', role: 'TEACHER', name: 'Professor', email: '', createdAt: Date.now() })
-        : json({ error: 'Código inválido.' }, 401);
-    }
     const id = typeof body.registration === 'string' ? body.registration.trim().toLowerCase() : '';
     if (!/^[a-z0-9_-]{1,64}$/.test(id) || body.password.length < 10) {
       return json({ error: 'Informe a matrícula e uma senha de pelo menos 10 caracteres.' }, 400);

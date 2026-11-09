@@ -7,11 +7,10 @@ import { QuizModal } from '../components/QuizModal';
 import { DialogueModal } from '../components/DialogueModal';
 import { EvidenceDossier } from '../components/EvidenceDossier';
 import { FinalReportModal } from '../components/FinalReportModal';
-import { AdminCrud } from '../components/AdminCrud';
 import { Ranking } from '../components/Ranking';
 import type { FinalEvaluation, Question, QuestionOption, PlayerStats, UserProfile } from '../types/game';
 import type { InteractiveNode } from '../game/engine/tileMaps';
-import { getQuestions, getRun, getSession, requestJson, submitAnswer } from '../lib/storage';
+import { getRun, getSession, requestJson, submitAnswer } from '../lib/storage';
 import { retroAudio } from '../lib/audio';
 
 function allCorrect(questions: Question[], answers: PlayerStats['answers']) {
@@ -55,8 +54,6 @@ export default function HomePage() {
       setUser(profile);
       if (profile?.role === 'PRACTICE' && openRanking) {
         setShowRanking(true);
-      } else if (profile?.role === 'TEACHER') {
-        setQuestions(await getQuestions());
       } else if (profile) {
         const run = await getRun();
         setQuestions(run.questions);
@@ -92,10 +89,6 @@ export default function HomePage() {
   );
 
   if (!user) return <LoginScreen onLoginSuccess={(profile, openRanking) => void load(profile, openRanking)} />;
-
-  if (user.role === 'TEACHER') return (
-    <AdminCrud questions={questions} onQuestionsUpdated={setQuestions} onClose={() => void logout()} />
-  );
 
   if (report && !showReport) return <Ranking finished onClose={() => void logout()} />;
   if (!stats) return showRanking ? <Ranking onClose={() => void logout()} /> : null;

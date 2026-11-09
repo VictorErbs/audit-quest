@@ -24,9 +24,8 @@ Converse com os personagens, explore os pontos marcados com curiosidades e respo
 ## Executar localmente
 
 Use Node.js 22 ou superior. Crie um arquivo `.env.local` com uma chave
-aleatória de pelo menos 32 caracteres em `AUDIT_SESSION_SECRET` e um código
-de professor aleatório de pelo menos 16 caracteres em `AUDIT_TEACHER_CODE`.
-Gere valores independentes, por exemplo executando duas vezes
+aleatória de pelo menos 32 caracteres em `AUDIT_SESSION_SECRET`.
+Gere a chave executando
 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
 
 ```bash
@@ -43,9 +42,7 @@ caso de empate, tem prioridade quem concluiu primeiro.
 
 Na aba **Professor**, basta informar o nome para jogar em modo de prática
 ou abrir o ranking geral. Durante a prática, o botão **DEV** libera portas
-e elevadores sem exigir respostas. A prática não gera nota no ranking. O **Painel
-administrativo** exige o código de professor para editar a campanha e
-consultar os pareceres. Alterações nas perguntas só afetam partidas que
+e elevadores sem exigir respostas. A prática não gera nota no ranking. Alterações nas perguntas só afetam partidas que
 ainda não registraram a primeira resposta. A correção, os pontos e o
 bloqueio de nova partida são aplicados no servidor. Para verificar as
 questões e os mapas, execute `npx tsx verify-check.ts`. Para gerar a versão
@@ -56,7 +53,7 @@ de produção, execute `npm run build`.
 Em desenvolvimento sem Blob, o servidor grava em `.audit-quest-data/v4/`.
 Na Vercel, conecte um **Vercel Blob privado** e disponibilize
 `BLOB_READ_WRITE_TOKEN` ao projeto. As chaves separam Preview e Production
-por prefixo. Configure `AUDIT_SESSION_SECRET` e `AUDIT_TEACHER_CODE` em cada
+por prefixo. Configure `AUDIT_SESSION_SECRET` em cada
 ambiente, com valores diferentes. Não coloque segredos no Git. Contas,
 partidas e relatórios ficam no Blob privado. A senha é armazenada como hash
 scrypt com salt. O ranking divulga nome e pontuação, sem e-mail ou matrícula.
@@ -79,5 +76,5 @@ O projeto usa Next.js, React, TypeScript e Tailwind CSS. O mapa e a movimentaç�
 
 - `src/data/` reúne o banco de questões e a descrição dos níveis.
 - `src/game/` contém mapas, diálogos, movimentação e renderização.
-- `src/components/` reúne o quiz, o dossiê, o parecer e o painel.
+- `src/components/` reúne o quiz, o dossiê, o parecer e o ranking.
 - `src/app/api/` fornece as rotas de questões e pareceres.
