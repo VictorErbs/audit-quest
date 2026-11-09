@@ -26,8 +26,7 @@ export async function POST(request: Request) {
 
   const key = `runs/${user.id}`;
   try {
-    const saved = await readRecord<Run>(key);
-    const initial = saved ?? { questions: await campaign(), answers: [] };
+    const initial: Run = { questions: await campaign(), answers: [] };
     const run = await updateRecord<Run>(key, current => {
       const state = current ?? initial;
       if (state.report) return state;
@@ -48,7 +47,8 @@ export async function POST(request: Request) {
     const answer = run.answers.find(item => item.questionId === body.questionId);
     if (!answer) return json({ error: 'Questão bloqueada ou alternativa inválida.' }, 400);
     return json(answer);
-  } catch {
+  } catch (error) {
+    console.error('Falha ao salvar resposta', error instanceof Error ? error.name : 'Erro desconhecido');
     return json({ error: 'Não foi possível registrar a resposta. Tente novamente.' }, 503);
   }
 }
