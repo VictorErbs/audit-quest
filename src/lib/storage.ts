@@ -4,8 +4,13 @@ type Answer = PlayerStats['answers'][number] & { explanation: string; tip: strin
 export type RankingEntry = { name: string; score: number; maxScore: number; own: boolean };
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { cache: 'no-store', ...init });
-  const body = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(path, { cache: 'no-store', ...init });
+  } catch {
+    throw new Error('Sem conexão com o servidor. Verifique a internet e tente novamente.');
+  }
+  const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || 'O servidor não conseguiu concluir a operação.');
   return body;
 }

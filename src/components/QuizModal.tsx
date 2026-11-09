@@ -86,25 +86,25 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-2xl bg-slate-900 border-4 border-slate-700 rounded-xl shadow-pixel overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-2 sm:p-4 backdrop-blur-sm animate-fade-in">
+      <div className="relative flex max-h-[92vh] max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border-2 sm:border-4 border-slate-700 bg-slate-900 shadow-pixel">
         {/* Header Ribbon */}
-        <div className="bg-slate-800 border-b-2 border-slate-700 px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b-2 border-slate-700 bg-slate-800 px-3 py-2 sm:px-5 sm:py-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <span className={`px-2 py-0.5 text-xs font-mono font-bold rounded border ${getDocBadgeColor(question.documentType)}`}>
               [{question.documentType}]
             </span>
-            <span className="text-sm font-pixel text-amber-300 tracking-wide">
+            <span className="break-all text-xs sm:text-sm font-pixel text-amber-300 tracking-wide">
               EVIDÊNCIA #{question.id.toUpperCase()}
             </span>
           </div>
-          <div className="text-xs font-mono font-bold text-slate-400">
+          <div className="shrink-0 text-[10px] sm:text-xs font-mono font-bold text-slate-400">
             VALOR: <span className="text-emerald-400">+{question.points} PTS</span>
           </div>
         </div>
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 sm:space-y-4 sm:p-5">
           {/* Title */}
           <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
             <FileText className="w-5 h-5 text-amber-400 shrink-0" />
@@ -147,7 +147,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                   key={opt.id}
                   disabled={showFeedback || busy || isAlreadyAnswered}
                   onClick={() => handleSelect(opt)}
-                  className={`w-full text-left p-3.5 rounded-lg border-2 transition-all flex items-start gap-3 text-sm ${btnStyle}`}
+                  className={`min-h-12 w-full touch-manipulation text-left p-3 sm:p-3.5 rounded-lg border-2 transition-all flex items-start gap-3 text-sm ${btnStyle}`}
                 >
                   <span className="font-pixel text-xs bg-slate-900 border border-slate-700 px-2 py-1 rounded shrink-0 font-bold text-amber-400">
                     {letter}
@@ -204,7 +204,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="bg-slate-800/80 border-t border-slate-700 p-4 flex items-center justify-between">
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-700 bg-slate-800/95 p-3 sm:p-4">
           <div className="text-xs text-slate-400 font-mono">
             {isAlreadyAnswered && !showFeedback && (
               <span className="text-emerald-400">✓ Evidência já catalogada</span>
