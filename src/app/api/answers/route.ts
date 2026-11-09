@@ -33,7 +33,8 @@ export async function POST(request: Request) {
       if (state.report) return state;
       const question = state.questions.find(item => item.id === body.questionId);
       const option = question?.options.find(item => item.id === body.optionId);
-      if (!question || !option || state.questions.some(item => item.levelNumber < question.levelNumber &&
+      if (!question || !option) return state;
+      if (user.role !== 'PRACTICE' && state.questions.some(item => item.levelNumber < question.levelNumber &&
           !state.answers.some(answer => answer.questionId === item.id && answer.isCorrect))) return state;
       const previous = state.answers.find(answer => answer.questionId === question.id);
       if (previous?.isCorrect || previous?.optionId === option.id) return state;

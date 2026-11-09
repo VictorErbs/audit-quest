@@ -164,6 +164,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             })}
           </div>
 
+          {busy && <p role="status" className="text-sm text-amber-300">Verificando a resposta…</p>}
           {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
           {/* Didactic Feedback Box (shown after answering) */}
           {showFeedback && selectedOption && (
