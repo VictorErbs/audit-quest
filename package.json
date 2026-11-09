@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.9.0",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^0.453.0",
