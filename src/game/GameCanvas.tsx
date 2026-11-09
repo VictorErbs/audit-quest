@@ -31,6 +31,8 @@ interface GameCanvasProps {
   onLevelComplete: (nextLevel: number) => void;
   onOpenDossier: () => void;
   onOpenRanking: () => void;
+  devMode: boolean;
+  onToggleDev?: () => void;
   onLogout: () => void;
 }
 
@@ -47,6 +49,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onLevelComplete,
   onOpenDossier,
   onOpenRanking,
+  devMode,
+  onToggleDev,
   onLogout,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -106,11 +110,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Check if door is unlocked (Dev Mode unlocks all doors immediately)
   const isDoorUnlocked = useCallback((node: InteractiveNode): boolean => {
-    if (!node.requiresQuestionIds || node.requiresQuestionIds.length === 0) return true;
+    if (devMode || !node.requiresQuestionIds || node.requiresQuestionIds.length === 0) return true;
     return node.requiresQuestionIds.every(qid => 
       stats.answers.some(a => a.questionId === qid && a.isCorrect)
     );
-  }, [stats.answers]);
+  }, [stats.answers, devMode]);
 
   // Check tile walkability
   const isWalkable = useCallback((gx: number, gy: number): boolean => {
@@ -448,6 +452,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-amber-400" /> : <Maximize className="w-3.5 h-3.5 text-amber-400" />}
           </button>
 
+          {onToggleDev && (
+            <button type="button" onClick={onToggleDev} aria-pressed={devMode}
+              title="Modo DEV: libera portas e elevadores"
+              className={`rounded border px-2 py-1 text-xs font-bold ${devMode ? 'border-purple-400 bg-purple-800 text-white' : 'border-slate-700 bg-slate-800 text-slate-200'}`}>
+              DEV {devMode ? 'ligado' : 'desligado'}
+            </button>
+          )}
           <button onClick={onOpenRanking}
             className="rounded border border-slate-700 bg-slate-800 p-1.5 text-amber-400 hover:bg-slate-700"
             title="Ranking" aria-label="Ranking">
@@ -487,7 +498,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 {nearbyNode.type === 'QUESTION' && 'Pressione [ESPAÇO] para examinar evidência'}
                 {nearbyNode.type === 'DOOR' && (
                   nearbyNode.id.includes('final')
-                    ? (isDoorUnlocked(nearbyNode) ? 'Pressione [ESPAÇO] para emitir o Parecer Final' : 'Porta trancada: conclua as evidências do Piso 3')
+                    ? (isDoorUnlocked(nearbyNode) ? (user?.role === 'PRACTICE' ? 'Pressione [ESPAÇO] para concluir a visita' : 'Pressione [ESPAÇO] para emitir o Parecer Final') : 'Porta trancada: conclua as evidências do Piso 3')
                     : 'Pressione [ESPAÇO] para destravar passagem'
                 )}
                 {nearbyNode.type === 'ELEVATOR' && 'Pressione [ESPAÇO] para subir de piso'}

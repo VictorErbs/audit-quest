@@ -45,6 +45,7 @@ export default function HomePage() {
   const [showDossier, setShowDossier] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
+  const [devMode, setDevMode] = useState(false);
 
   async function load(currentUser?: UserProfile, openRanking = false) {
     setLoading(true);
@@ -99,6 +100,8 @@ export default function HomePage() {
   if (report && !showReport) return <Ranking finished onClose={() => void logout()} />;
   if (!stats) return showRanking ? <Ranking onClose={() => void logout()} /> : null;
 
+  const isPractice = user.role === 'PRACTICE';
+  const bypass = isPractice && devMode;
   const canSubmit = allCorrect(questions, stats.answers);
   const handleAnswer = async (option: QuestionOption) => {
     if (!activeQuestion) throw new Error('Abra um terminal.');
@@ -117,13 +120,18 @@ export default function HomePage() {
       <GameCanvas
         currentLevel={stats.currentLevel} stats={stats} questions={questions} user={user}
         audioEnabled={audioEnabled}
+        devMode={bypass}
+        onToggleDev={isPractice ? () => {
+          if (bypass) setStats(buildStats(questions, stats.answers));
+          setDevMode(!bypass);
+        } : undefined}
         isModalOpen={!!activeQuestion || !!dialogue || showDossier || showReport || showRanking}
         onToggleAudio={() => { retroAudio.enabled = !audioEnabled; setAudioEnabled(!audioEnabled); }}
         onTriggerQuestion={setActiveQuestion} onTriggerDialogue={setDialogue}
         onLevelComplete={nextLevel => {
-          if (!allCorrect(questions.filter(q => q.levelNumber <= stats.currentLevel), stats.answers)) return;
+          if (!bypass && !allCorrect(questions.filter(q => q.levelNumber <= stats.currentLevel), stats.answers)) return;
           if (nextLevel > 3) {
-            if (user.role === 'PRACTICE') setShowRanking(true);
+            if (isPractice) setShowRanking(true);
             else setShowReport(true);
           }
           else setStats({ ...stats, currentLevel: nextLevel, completedLevels: Array.from(new Set([...stats.completedLevels, stats.currentLevel])) });
@@ -138,7 +146,7 @@ export default function HomePage() {
       {dialogue && <DialogueModal node={dialogue} onClose={() => setDialogue(null)} />}
       {showDossier && <EvidenceDossier stats={stats} questions={questions}
         onClose={() => setShowDossier(false)}
-        onOpenFinalReport={canSubmit ? () => { setShowDossier(false); if (user.role === 'PRACTICE') setShowRanking(true); else setShowReport(true); } : undefined} />}
+        onOpenFinalReport={canSubmit ? () => { setShowDossier(false); if (isPractice) setShowRanking(true); else setShowReport(true); } : undefined} />}
       {showReport && canSubmit && <FinalReportModal stats={stats} questions={questions}
         onClose={() => setShowReport(false)} onSubmitted={setReport} />}
       {showRanking && <Ranking onClose={() => setShowRanking(false)} />}
