@@ -26,7 +26,9 @@ async function read<T>(key: string): Promise<{ value: T; etag?: string } | null>
     const result = await get(pathname(key), { access: 'private', useCache: false });
     if (!result) return null;
     if (result.statusCode !== 200) throw new Error('Resposta inesperada do Blob.');
-    return { value: await new Response(result.stream).json() as T, etag: result.blob.etag };
+    // Compressed downloads can return a weak ETag. Blob writes require the strong tag.
+    const etag = result.blob.etag.replace(/^W\//, '');
+    return { value: await new Response(result.stream).json() as T, etag };
   }
   try {
     return { value: JSON.parse(await readFile(localPath(key), 'utf8')) as T };
