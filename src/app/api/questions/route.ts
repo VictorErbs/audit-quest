@@ -1,37 +1,57 @@
 import { NextResponse } from 'next/server';
 import { INITIAL_QUESTIONS } from '@/data/defaultQuestions';
+import { readRecords, writeRecords } from '@/lib/serverStore';
+import { Question } from '@/types/game';
 
-// In-memory cache for serverless environments
-let serverQuestions = [...INITIAL_QUESTIONS];
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  return NextResponse.json(serverQuestions);
-}
-
-export async function POST(request: Request) {
   try {
-    const question = await request.json();
-    const index = serverQuestions.findIndex(q => q.id === question.id);
-    if (index >= 0) {
-      serverQuestions[index] = question;
-    } else {
-      serverQuestions.push(question);
-    }
-    return NextResponse.json({ success: true, questions: serverQuestions });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Invalid payload' }, { status: 400 });
+    const saved = await readRecords<Question>('questions');
+    return NextResponse.json(INITIAL_QUESTIONS.map(question =>
+      saved.find(item => item.id === question.id) ?? question
+    ));
+  } catch {
+    return NextResponse.json({ error: 'Banco de questões indisponível.' }, { status: 503 });
   }
 }
 
-export async function DELETE(request: Request) {
+export async function PUT(request: Request) {
+  const question: Question | null = await request.json().catch(() => null);
+  const original = INITIAL_QUESTIONS.find(item => item.id === question?.id);
+  if (!original || !question
+    || typeof question.title !== 'string' || !question.title.trim()
+    || typeof question.prompt !== 'string' || !question.prompt.trim()
+    || !Array.isArray(question.options) || question.options.length < 2
+    || question.options.some(option => typeof option?.id !== 'string'
+      || typeof option.text !== 'string' || !option.text.trim()
+      || typeof option.isCorrect !== 'boolean')
+    || new Set(question.options.map(option => option.id)).size !== question.options.length
+    || question.options.filter(option => option.isCorrect).length !== 1) {
+    return NextResponse.json({ error: 'Preencha o título, o enunciado e as alternativas e marque uma resposta correta.' }, { status: 400 });
+  }
+
+  const updated = {
+    ...question,
+    levelNumber: original.levelNumber,
+    category: original.category,
+    difficulty: original.difficulty,
+    points: original.points,
+  };
+
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    if (id) {
-      serverQuestions = serverQuestions.filter(q => q.id !== id);
-    }
-    return NextResponse.json({ success: true, questions: serverQuestions });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to delete' }, { status: 400 });
+    await writeRecords('questions', [updated]);
+    return NextResponse.json(updated);
+  } catch {
+    return NextResponse.json({ error: 'Não foi possível salvar a questão compartilhada.' }, { status: 503 });
+  }
+}
+
+export async function POST() {
+  try {
+    await writeRecords('questions', INITIAL_QUESTIONS);
+    return NextResponse.json(INITIAL_QUESTIONS);
+  } catch {
+    return NextResponse.json({ error: 'Não foi possível restaurar as questões.' }, { status: 503 });
   }
 }

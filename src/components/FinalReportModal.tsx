@@ -11,6 +11,7 @@ interface FinalReportModalProps {
   stats: PlayerStats;
   questions: Question[];
   user: UserProfile | null;
+  preview: boolean;
   onClose: () => void;
   onRestart: () => void;
 }
@@ -19,12 +20,15 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
   stats,
   questions,
   user,
+  preview,
   onClose,
   onRestart,
 }) => {
   const [decision, setDecision] = useState<FinalEvaluation['regulatoryDecision']>('MULTA_PESADA');
   const [rationale, setRationale] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -68,10 +72,11 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
   else if (percentage >= 60) rankTitle = 'Auditor Fiscal Sênior';
   else if (percentage >= 40) rankTitle = 'Auditor Fiscal Pleno';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving || !stats.runId) return;
     const evaluation: FinalEvaluation = {
-      id: 'eval-' + Date.now(),
+      id: stats.runId,
       userId: user?.id || 'guest',
       userName: user?.name || 'Estudante de Contábeis',
       totalScore: stats.score,
@@ -84,7 +89,16 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
       submittedAt: Date.now(),
     };
 
-    saveEvaluation(evaluation);
+    setSaving(true);
+    setSaveError('');
+    try {
+      if (!preview) await saveEvaluation(evaluation);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Falha ao enviar. Tente novamente.');
+      return;
+    } finally {
+      setSaving(false);
+    }
     setSubmitted(true);
     retroAudio.playCorrect();
     confetti({ particleCount: 80, spread: 70, origin: { y: 0.5 } });
@@ -193,19 +207,21 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
                 />
               </div>
 
+              {saveError && <p role="alert" className="text-sm text-rose-300">{saveError} Tente novamente.</p>}
               <button
                 type="submit"
+                disabled={saving}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-lg font-pixel text-xs tracking-wider shadow-pixel transition transform active:scale-95 flex items-center justify-center gap-2"
               >
                 <FileCheck2 className="w-5 h-5" />
-                <span>Assinar e Lavrar Relatório Regulatório Final</span>
+                <span>{saving ? 'Arquivando…' : preview ? 'Simular envio (DEV)' : 'Assinar e Lavrar Relatório Regulatório Final'}</span>
               </button>
             </form>
           ) : (
             <div className="bg-emerald-950/40 border-2 border-emerald-600 p-4 rounded-lg space-y-3">
               <div className="flex items-center gap-2 text-emerald-400 font-bold font-mono text-sm">
                 <CheckCircle className="w-5 h-5" />
-                RELATÓRIO LAVRADO E REGISTRADO COM SUCESSO!
+                {preview ? 'ENVIO SIMULADO (DEV)' : 'RELATÓRIO LAVRADO E REGISTRADO COM SUCESSO!'}
               </div>
               <div className="text-xs font-mono text-slate-300">
                 <span className="font-bold text-white">Deliberação Regulatória:</span> {decision}

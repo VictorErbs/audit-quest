@@ -8,8 +8,8 @@ console.log('Running Audit Quest 3-level Item 4.10 integrity verification...');
 assert.strictEqual(LEVEL_METADATA.length, 3, 'Must have exactly 3 levels');
 assert.strictEqual(Object.keys(MAPS).length, 3, 'MAPS must have exactly 3 levels');
 
-// 2. Verify questions: exactly 6, strictly item 4.10, ordered easiest to hardest
-assert.strictEqual(INITIAL_QUESTIONS.length, 6, 'Must have exactly 6 questions (2 per level)');
+// 2. Verify campaign questions and difficulty by level
+assert.strictEqual(INITIAL_QUESTIONS.length, 9, 'Must have exactly 9 questions (3 per level)');
 
 const expectedDifficultyPerLevel: Record<number, 'FACIL' | 'MEDIO' | 'DIFICIL'> = {
   1: 'FACIL',
@@ -44,7 +44,7 @@ for (const q of INITIAL_QUESTIONS) {
 
   assert(q.points > 0, `Question ${q.id} points must be > 0`);
   assert(q.title.length > 0, `Question ${q.id} missing title`);
-  assert(q.normReference.includes('4.10'), `Question ${q.id} must cite Item 4.10`);
+  assert(q.normReference.trim(), 'Each question must cite its source');
 }
 
 // 3. Verify MAPS existence & DIVERSITY: All 3 levels must have unique layouts!
@@ -96,7 +96,7 @@ const finalDoor = MAPS[3].interactives.find(n => n.id === 'door-lvl3-final-a');
 assert(finalDoor, 'Map 3 must have door-lvl3-final-a');
 assert.strictEqual(finalDoor.type, 'DOOR');
 assert(finalDoor.name.includes('Parecer Final'), 'Final door name must mention Parecer Final');
-assert.deepStrictEqual(finalDoor.requiresQuestionIds, ['q-410-5', 'q-410-6'], 'Final door must require questions 5 and 6');
+assert.deepStrictEqual(finalDoor.requiresQuestionIds, ['q-410-5', 'q-410-6', 'q-quality-15'], 'Final door must require all three questions');
 
 // 4. Verify door and elevator dependencies link to existing questions
 for (let lvl = 1; lvl <= 3; lvl++) {

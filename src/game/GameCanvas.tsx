@@ -31,7 +31,8 @@ interface GameCanvasProps {
   onTriggerDialogue: (npc: InteractiveNode) => void;
   onLevelComplete: (nextLevel: number) => void;
   onOpenDossier: () => void;
-  onOpenFinalReport: () => void;
+  devMode: boolean;
+  onToggleDev: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
   onSelectLevel: (lvl: number) => void;
@@ -49,7 +50,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onTriggerDialogue,
   onLevelComplete,
   onOpenDossier,
-  onOpenFinalReport,
+  devMode,
+  onToggleDev,
   onOpenAdmin,
   onLogout,
   onSelectLevel,
@@ -59,7 +61,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const [devMode, setDevMode] = useState(false);
   const [nearbyNode, setNearbyNode] = useState<InteractiveNode | null>(null);
 
   const mapData: MapData = MAPS[currentLevel] || MAPS[1];
@@ -421,7 +422,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         </div>
 
         {/* Level Quick Select Dropdown/Buttons */}
-        <div className="hidden lg:flex items-center gap-1 shrink-0">
+        {devMode && <div className="absolute top-full left-3 mt-2 flex items-center gap-1">
           {LEVEL_METADATA.map(m => (
             <button
               key={m.level}
@@ -435,7 +436,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               {`N${m.level}`}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -475,8 +476,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           {/* Dev Mode Toggle */}
           <button
             onClick={() => {
-              const next = !devMode;
-              setDevMode(next);
+              onToggleDev();
               retroAudio.playBlip();
             }}
             className={`px-2 py-1 rounded text-[10px] font-pixel transition border flex items-center gap-1 shrink-0 ${

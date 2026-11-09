@@ -35,6 +35,7 @@ export interface Evidence {
 }
 
 export interface PlayerStats {
+  runId?: string;
   score: number;
   maxScore: number;
   answers: {

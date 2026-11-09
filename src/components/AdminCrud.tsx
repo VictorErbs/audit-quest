@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Question, Category, FinalEvaluation } from '../types/game';
-import { saveQuestion, deleteQuestion, resetQuestionsToDefault, getEvaluations } from '../lib/storage';
-import { Plus, Edit2, Trash2, RotateCcw, X, Check, BookOpen, Users, Award, Shield } from 'lucide-react';
+import { Question, FinalEvaluation } from '../types/game';
+import { saveQuestion, resetQuestionsToDefault, getEvaluations, getSharedEvaluations } from '../lib/storage';
+import { Edit2, RotateCcw, X, Check, BookOpen, Users, Award, Shield } from 'lucide-react';
 
 interface AdminCrudProps {
   questions: Question[];
@@ -19,9 +19,11 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
   const [activeTab, setActiveTab] = useState<'QUESTIONS' | 'EVALUATIONS'>('QUESTIONS');
   const [selectedLevelFilter, setSelectedLevelFilter] = useState<number | 'ALL'>('ALL');
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [evaluationError, setEvaluationError] = useState(false);
 
-  // Form State for Create / Edit
+  // Form state for the selected campaign question
   const [formData, setFormData] = useState<Question>({
     id: '',
     category: 'CONCENTRACAO',
@@ -47,76 +49,47 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
     const local = getEvaluations();
     setEvaluations(local);
 
-    // Merge evaluations from backend serverless API
-    fetch('/api/evaluations')
-      .then(res => res.json())
-      .then((serverData: FinalEvaluation[]) => {
-        if (Array.isArray(serverData) && serverData.length > 0) {
-          const map = new Map<string, FinalEvaluation>();
-          [...serverData, ...local].forEach(item => map.set(item.id, item));
-          setEvaluations(Array.from(map.values()));
-        }
+    getSharedEvaluations()
+      .then(serverData => {
+        const merged = new Map([...local, ...serverData].map(item => [item.id, item]));
+        setEvaluations(Array.from(merged.values()).sort((a, b) => b.submittedAt - a.submittedAt));
       })
-      .catch(() => {});
+      .catch(() => setEvaluationError(true));
   }, []);
 
-  const handleStartCreate = () => {
-    setFormData({
-      id: 'custom-' + Date.now(),
-      category: 'CONCENTRACAO',
-      levelNumber: 1,
-      difficulty: 'FACIL',
-      title: '',
-      scenario: '',
-      documentType: 'RELATORIO',
-      prompt: '',
-      normReference: 'Livro Auditoria Contábil (Prof. Crepaldi) — Item 4.10',
-      didacticTip: '',
-      points: 200,
-      options: [
-        { id: 'opt-1', text: 'Opção correta com base na norma', isCorrect: true, explanation: 'Explicação didática da conformidade técnica.' },
-        { id: 'opt-2', text: 'Opção incorreta comum de mercado', isCorrect: false, explanation: 'Explicação do porquê está em desacordo com as normas de auditoria.' },
-        { id: 'opt-3', text: 'Outra alternativa incorreta', isCorrect: false, explanation: 'Justificativa da improcedência.' },
-      ],
-    });
-    setIsCreatingNew(true);
-    setEditingQuestion(null);
+  const handleStartEdit = (question: Question) => {
+    setFormData(question);
+    setEditingQuestion(question);
+    setError('');
   };
 
-  const handleStartEdit = (q: Question) => {
-    setFormData(JSON.parse(JSON.stringify(q)));
-    setEditingQuestion(q);
-    setIsCreatingNew(false);
-  };
-
-  const handleDelete = (id: string) => {
-    if (id.startsWith('q-410-')) {
-      alert('Esta é uma questão essencial da campanha oficial (Item 4.10) e é exigida para abrir as portas do jogo. Ela não pode ser excluída.');
-      return;
-    }
-    if (confirm('Tem certeza que deseja excluir esta questão investigativa?')) {
-      const updated = deleteQuestion(id);
-      onQuestionsUpdated(updated);
+  const handleResetDefaults = async () => {
+    if (saving || !confirm('Restaurar banco original de questões de auditoria do Item 4.10?')) return;
+    setSaving(true);
+    setError('');
+    try {
+      onQuestionsUpdated(await resetQuestionsToDefault());
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Falha ao restaurar as questões.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleResetDefaults = () => {
-    if (confirm('Restaurar banco original de questões de auditoria do Item 4.10?')) {
-      const updated = resetQuestionsToDefault();
-      onQuestionsUpdated(updated);
-    }
-  };
-
-  const handleSaveForm = (e: React.FormEvent) => {
+  const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.prompt) {
-      alert('Preencha pelo menos o título e o enunciado da questão.');
-      return;
+    if (saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await saveQuestion(formData);
+      onQuestionsUpdated(questions.map(question => question.id === updated.id ? updated : question));
+      setEditingQuestion(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Falha ao salvar a questão.');
+    } finally {
+      setSaving(false);
     }
-    const updated = saveQuestion(formData);
-    onQuestionsUpdated(updated);
-    setIsCreatingNew(false);
-    setEditingQuestion(null);
   };
 
   const filteredQuestions = questions.filter(q => {
@@ -150,16 +123,16 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
         <div className="bg-slate-950 px-6 py-2 border-b border-slate-800 flex items-center justify-between">
           <div className="flex gap-2">
             <button
-              onClick={() => { setActiveTab('QUESTIONS'); setIsCreatingNew(false); setEditingQuestion(null); }}
+              onClick={() => { setActiveTab('QUESTIONS'); setEditingQuestion(null); }}
               className={`px-4 py-2 rounded text-xs font-pixel transition flex items-center gap-2 ${
                 activeTab === 'QUESTIONS' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
               }`}
             >
               <BookOpen className="w-4 h-4" />
-              <span>CRUD Questões ({questions.length})</span>
+              <span>Questões da campanha ({questions.length})</span>
             </button>
             <button
-              onClick={() => { setActiveTab('EVALUATIONS'); setIsCreatingNew(false); setEditingQuestion(null); }}
+              onClick={() => { setActiveTab('EVALUATIONS'); setEditingQuestion(null); }}
               className={`px-4 py-2 rounded text-xs font-pixel transition flex items-center gap-2 ${
                 activeTab === 'EVALUATIONS' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
               }`}
@@ -169,17 +142,11 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
             </button>
           </div>
 
-          {activeTab === 'QUESTIONS' && !isCreatingNew && !editingQuestion && (
+          {activeTab === 'QUESTIONS' && !editingQuestion && (
             <div className="flex items-center gap-2">
               <button
-                onClick={handleStartCreate}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-mono font-bold flex items-center gap-1.5 transition"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nova Questão</span>
-              </button>
-              <button
                 onClick={handleResetDefaults}
+                disabled={saving}
                 title="Restaurar padrão"
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-1.5 rounded transition"
               >
@@ -191,19 +158,20 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto flex-1 min-h-0">
-          {/* TAB 1: QUESTIONS CRUD */}
+          {error && <p role="alert" className="mb-4 text-sm text-rose-300">{error}</p>}
+          {/* TAB 1: QUESTIONS */}
           {activeTab === 'QUESTIONS' && (
             <div>
-              {/* Form Mode (Create / Edit) */}
-              {(isCreatingNew || editingQuestion) ? (
+              {/* Question editor */}
+              {editingQuestion ? (
                 <form onSubmit={handleSaveForm} className="space-y-4">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                     <span className="font-pixel text-xs text-amber-400">
-                      {isCreatingNew ? 'CRIAR NOVO CASO INVESTIGATIVO' : `EDITAR QUESTÃO: ${formData.id}`}
+                      {`EDITAR QUESTÃO: ${formData.id}`}
                     </span>
                     <button
                       type="button"
-                      onClick={() => { setIsCreatingNew(false); setEditingQuestion(null); }}
+                      onClick={() => { setEditingQuestion(null); }}
                       className="text-slate-400 hover:text-white text-xs font-mono"
                     >
                       Cancelar
@@ -215,25 +183,7 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
                       <label className="block text-xs font-mono text-slate-400 mb-1">Piso / Nível:</label>
                       <select
                         value={formData.levelNumber}
-                        onChange={e => {
-                          const lvl = Number(e.target.value);
-                          const catMap: Record<number, Category> = {
-                            1: 'CONCENTRACAO',
-                            2: 'DIVULGACAO',
-                            3: 'RESISTENCIA_RISCO',
-                          };
-                          const diffMap: Record<number, 'FACIL' | 'MEDIO' | 'DIFICIL'> = {
-                            1: 'FACIL',
-                            2: 'MEDIO',
-                            3: 'DIFICIL',
-                          };
-                          setFormData({ 
-                            ...formData, 
-                            levelNumber: lvl, 
-                            category: catMap[lvl] || 'CONCENTRACAO',
-                            difficulty: diffMap[lvl] || 'FACIL'
-                          });
-                        }}
+                        disabled
                         className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
                       >
                         <option value={1}>Nível 1: Concentração Big Four (Fácil)</option>
@@ -250,11 +200,10 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
                         className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
                       >
                         <option value="RELATORIO">Relatório</option>
-                        <option value="EMAIL">E-mail</option>
+                        <option value="MEMORANDO">Memorando</option>
                         <option value="PLANILHA">Planilha</option>
-                        <option value="CONTRATO">Contrato</option>
+                        <option value="DOSSIE">Dossiê</option>
                         <option value="PARECER">Parecer</option>
-                        <option value="DEPOIMENTO">Depoimento</option>
                       </select>
                     </div>
 
@@ -263,7 +212,7 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
                       <input
                         type="number"
                         value={formData.points}
-                        onChange={e => setFormData({ ...formData, points: Number(e.target.value) })}
+                        readOnly
                         className="w-full bg-slate-800 border border-slate-700 text-white p-2 rounded text-xs font-mono"
                       />
                     </div>
@@ -377,13 +326,14 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
                   <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                     <button
                       type="button"
-                      onClick={() => { setIsCreatingNew(false); setEditingQuestion(null); }}
+                      onClick={() => { setEditingQuestion(null); }}
                       className="px-4 py-2 text-xs font-mono text-slate-400 hover:text-white"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
+                      disabled={saving}
                       className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2 rounded text-xs font-pixel shadow-pixel transition"
                     >
                       Salvar Questão
@@ -445,13 +395,6 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(q.id)}
-                            title="Excluir"
-                            className="bg-rose-950 hover:bg-rose-900 text-rose-300 p-2 rounded transition"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       </div>
                     ))}
@@ -469,6 +412,11 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
                 <span>{evaluations.length} relatório(s) arquivado(s)</span>
               </div>
 
+              {evaluationError && (
+                <p role="status" className="mb-4 text-sm text-amber-300">
+                  Relatórios compartilhados indisponíveis. Exibindo os registros antigos deste navegador.
+                </p>
+              )}
               {evaluations.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 font-mono text-sm">
                   Nenhum aluno submeteu o relatório final ainda. Ao concluir a partida, as fiscalizações aparecerão aqui!

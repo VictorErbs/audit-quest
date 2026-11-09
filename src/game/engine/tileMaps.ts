@@ -74,6 +74,14 @@ const MAP_1_ASCII = [
 
 const MAP_1_INTERACTIVES: InteractiveNode[] = [
   {
+    "id": "node-quality-11",
+    "x": 2,
+    "y": 2,
+    "type": "QUESTION",
+    "name": "Terminal 1C: Elementos do controle de qualidade",
+    "questionId": "q-quality-11"
+},
+  {
     id: 'npc-lvl1-guide',
     x: 2,
     y: 9,
@@ -83,7 +91,8 @@ const MAP_1_INTERACTIVES: InteractiveNode[] = [
       "Bem-vindo ao Piso 1 da Operação Transparência!",
       "Nossa investigação é baseada no Item 4.10 do livro Auditoria Contábil do Prof. Crepaldi.",
       "Os reguladores internacionais estão exigindo transparência sobre governança, qualidade e dados financeiros.",
-      "Investigue o primeiro terminal à direita para liberar a catraca de segurança deste piso!"
+      "💡 VOCÊ SABIA? Na questão 11 (FGV/2014), qualidade não se limita à execução: envolve também liderança, ética, aceitação de clientes e recursos humanos.",
+      "Investigue o primeiro terminal à direita para liberar a catraca. Acerte os três terminais (1A, 1B e 1C) para subir de nível!"
     ],
     avatar: 'inspector'
   },
@@ -129,7 +138,7 @@ const MAP_1_INTERACTIVES: InteractiveNode[] = [
     y: 1,
     type: 'ELEVATOR',
     name: 'Elevador de Acesso ao Piso 2',
-    requiresQuestionIds: ['q-410-1', 'q-410-2'],
+    requiresQuestionIds: ['q-410-1', 'q-410-2', 'q-quality-11'],
     dialogue: ["Elevador bloqueado! Conclua a investigação do Piso 1 para subir ao Piso 2."]
   },
   {
@@ -138,7 +147,7 @@ const MAP_1_INTERACTIVES: InteractiveNode[] = [
     y: 1,
     type: 'ELEVATOR',
     name: 'Elevador de Acesso ao Piso 2',
-    requiresQuestionIds: ['q-410-1', 'q-410-2'],
+    requiresQuestionIds: ['q-410-1', 'q-410-2', 'q-quality-11'],
     dialogue: ["Elevador bloqueado! Conclua a investigação do Piso 1 para subir ao Piso 2."]
   },
   {
@@ -189,6 +198,14 @@ const MAP_2_ASCII = [
 
 const MAP_2_INTERACTIVES: InteractiveNode[] = [
   {
+    "id": "node-quality-14",
+    "x": 14,
+    "y": 9,
+    "type": "QUESTION",
+    "name": "Terminal 2C: Quem pode revisar a qualidade?",
+    "questionId": "q-quality-14"
+},
+  {
     id: 'npc-lvl2-analyst',
     x: 2,
     y: 9,
@@ -198,7 +215,8 @@ const MAP_2_INTERACTIVES: InteractiveNode[] = [
       "Piso 2 alcançado, Fiscal! As coisas começam a ficar mais técnicas.",
       "No item 4.10, o Prof. Crepaldi categoriza as informações que os reguladores exigem em 4 áreas.",
       "Algumas áreas as auditorias aceitam divulgar de bom grado; outras geram resistência.",
-      "Investigue o Terminal 2A aqui na ala oeste para liberar o acesso ao Arquivo Confidencial!"
+      "💡 VOCÊ SABIA? Na questão 14 (CESPE/2019), o revisor pode ser um profissional da própria firma ou alguém externo qualificado. Ele não pode ter participado da auditoria que vai revisar.",
+      "Investigue o Terminal 2A na ala oeste para liberar o Arquivo Confidencial. Acerte os três terminais (2A, 2B e 2C) para subir!"
     ],
     avatar: 'analyst'
   },
@@ -235,7 +253,7 @@ const MAP_2_INTERACTIVES: InteractiveNode[] = [
     y: 1,
     type: 'ELEVATOR',
     name: 'Elevador de Acesso ao Piso 3',
-    requiresQuestionIds: ['q-410-3', 'q-410-4'],
+    requiresQuestionIds: ['q-410-3', 'q-410-4', 'q-quality-14'],
     dialogue: ["Elevador trancado! Complete a análise das áreas de divulgação para subir ao Piso 3."]
   },
   {
@@ -244,7 +262,7 @@ const MAP_2_INTERACTIVES: InteractiveNode[] = [
     y: 1,
     type: 'ELEVATOR',
     name: 'Elevador de Acesso ao Piso 3',
-    requiresQuestionIds: ['q-410-3', 'q-410-4'],
+    requiresQuestionIds: ['q-410-3', 'q-410-4', 'q-quality-14'],
     dialogue: ["Elevador trancado! Complete a análise das áreas de divulgação para subir ao Piso 3."]
   },
   {
@@ -295,6 +313,14 @@ const MAP_3_ASCII = [
 
 const MAP_3_INTERACTIVES: InteractiveNode[] = [
   {
+    "id": "node-quality-15",
+    "x": 11,
+    "y": 3,
+    "type": "QUESTION",
+    "name": "Terminal 3C: Independência, revisão e monitoramento",
+    "questionId": "q-quality-15"
+},
+  {
     id: 'npc-lvl3-crepaldi',
     x: 2,
     y: 9,
@@ -304,7 +330,8 @@ const MAP_3_INTERACTIVES: InteractiveNode[] = [
       "Excelente progresso, Fiscal! Chegamos ao Piso 3: o andar do Conselho e da Alta Cúpula.",
       "Aqui enfrentamos a forte resistência das auditorias em abrir suas contas e processos disciplinares.",
       "Além disso, avaliaremos o risco sistêmico de escassez de oferta para grandes corporações se uma das Big Four cair.",
-      "Resolva as duas últimas questões nos terminais para desbloquear a Grande Porta e emitir seu Parecer Final!"
+      "💡 VOCÊ SABIA? Na questão 15, monitorar significa avaliar continuamente o sistema, inclusive inspecionando trabalhos concluídos. Já a revisão do trabalho ocorre até a data do relatório, e não depois.",
+      "Resolva as três questões nos terminais para desbloquear a Grande Porta e emitir seu Parecer Final!"
     ],
     avatar: 'crepaldi'
   },
@@ -377,7 +404,7 @@ const MAP_3_INTERACTIVES: InteractiveNode[] = [
     y: 1,
     type: 'DOOR',
     name: 'Porta do Conselho Regulador (Parecer Final)',
-    requiresQuestionIds: ['q-410-5', 'q-410-6'],
+    requiresQuestionIds: ['q-410-5', 'q-410-6', 'q-quality-15'],
     dialogue: ["Porta do Conselho trancada! Conclua as investigações de Resistência e Risco Sistêmico para emitir o Parecer Final."]
   },
   {
@@ -386,7 +413,7 @@ const MAP_3_INTERACTIVES: InteractiveNode[] = [
     y: 1,
     type: 'DOOR',
     name: 'Porta do Conselho Regulador (Parecer Final)',
-    requiresQuestionIds: ['q-410-5', 'q-410-6'],
+    requiresQuestionIds: ['q-410-5', 'q-410-6', 'q-quality-15'],
     dialogue: ["Porta do Conselho trancada! Conclua as investigações de Resistência e Risco Sistêmico para emitir o Parecer Final."]
   }
 ];

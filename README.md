@@ -1,61 +1,50 @@
-# AUDIT QUEST — Operação Transparência (Item 4.10)
+# Audit Quest — Operação Transparência
 
-> Jogo investigativo em Pixel Art RPG desenvolvido para estudantes de Ciências Contábeis, estritamente baseado no **Item 4.10 — "Transparência de auditorias está no foco de reguladores"** do livro *Auditoria Contábil* (Prof. Dr. Silvio Aparecido Crepaldi, pág. 149–150).
+Audit Quest é um jogo educativo de investigação em pixel art para estudantes de Ciências Contábeis. Você assume o papel de fiscal contábil em uma simulação e explora três pisos para reunir evidências sobre transparência e qualidade na auditoria independente.
 
----
+A campanha usa o item 4.10 do livro *Auditoria Contábil*, de Silvio Aparecido Crepaldi (páginas 149–150), e três questões de prova selecionadas do material das páginas 152–157. As questões de prova seguem o contexto normativo de sua época.
 
-## 🎮 Visão Geral
+## Como jogar
 
-O jogador assume o papel de um Fiscal Contábil credenciado pela CVM/CFC investigando firmas de auditoria independente (Big Four: PwC, Deloitte, EY e KPMG) em busca de evidências sobre governança, relatórios de qualidade, balanços e riscos sistêmicos de concentração de mercado.
+Converse com os personagens, explore os pontos marcados com curiosidades e responda às perguntas nos terminais. Cada piso tem três questões obrigatórias. Acerte todas para liberar a saída. Se errar, você pode tentar novamente e recebe metade dos pontos ao acertar. No último piso, atravesse a porta do Conselho para emitir o parecer final e registrar sua justificativa.
 
----
+| Piso | Dificuldade | Temas |
+| --- | --- | --- |
+| 1 | Fácil | Foco dos reguladores, concentração nas Big Four e elementos do controle de qualidade |
+| 2 | Média | Áreas de divulgação e quem pode revisar a qualidade de uma auditoria |
+| 3 | Difícil | Resistência à divulgação, risco de falta de oferta, independência e monitoramento |
 
-## 🏢 Estrutura dos Níveis (Item 4.10 Crepaldi)
+| Controle | Ação |
+| --- | --- |
+| Setas ou W, A, S, D | Mover |
+| Espaço | Interagir com personagens, terminais, portas e elevadores |
+| B | Abrir o Dossiê de Evidências |
+| F | Alternar tela cheia |
 
-1. **Piso 1 (Fácil): Foco dos Reguladores & Concentração Big Four**
-   - Hall dos Reguladores e escritórios abertos.
-   - Medidas exigidas por órgãos internacionais para aumentar a transparência.
-   - Domínio de mais de 75% a 90% do mercado corporativo pelas 4 maiores firmas.
-   - Catracas centrais lacradas liberadas via resolução de evidências.
+## Executar localmente
 
-2. **Piso 2 (Médio): As Quatro Áreas de Divulgação**
-   - Ala oeste de governança e arquivo confidencial de processos a leste.
-   - Governança interna, relatórios de qualidade, dados financeiros e lista de clientes.
-   - Áreas aceitas pelas firmas sem forte oposição vs áreas de atrito.
-   - Divisão vertical blindada destravada pelo terminal analítico.
+Com Node.js e npm instalados, abra um terminal na pasta do projeto:
 
-3. **Piso 3 (Difícil): Resistência & Risco Sistêmico de Oferta**
-   - Andar executivo e Salão do Conselho Regulador.
-   - Forte resistência das auditorias em abrir balanços próprios auditados, processos disciplinares e litígios.
-   - Risco sistêmico de escassez de oferta de auditoria para multinacionais.
-   - **Última Porta do Conselho**: Acesso exclusivo para emitir o Parecer Regulatório Final e Certificado de Fiscal.
-
----
-
-## 🕹️ Controles
-
-- **Mover**: Setas do teclado ou `W / A / S / D`
-- **Interagir**: Tecla `[ ESPAÇO ]` (diálogos, computadores, portas, elevadores)
-- **Dossiê de Evidências**: Tecla `B`
-- **Tela Cheia**: Tecla `F`
-- **Modo Desenvolvedor**: Botão `🛠️ DEV` no topo (desbloqueia portas e navegação livre entre pisos para testes)
-
----
-
-## 🚀 Como Executar
-
-```bash
-# Instalar dependências
-npm install
-
-# Rodar testes de integridade das questões e mapas
-npx tsx verify-check.ts
-
-# Iniciar servidor de desenvolvimento
+~~~bash
+npm ci
 npm run dev
+~~~
 
-# Gerar build de produção
-npm run build
-```
+Abra [localhost:3000](http://localhost:3000) no navegador. Use a mesma matrícula no mesmo navegador para retomar o progresso. Para verificar as questões e os mapas, execute `npx tsx verify-check.ts`. Para gerar a versão de produção, use `npm run build`.
 
-Acesse [http://localhost:3000](http://localhost:3000) no seu navegador.
+## Painel e armazenamento
+
+O painel permite editar as questões da campanha e consultar os pareceres enviados. O progresso individual fica no navegador. Em desenvolvimento, o servidor guarda as edições e os pareceres em `.audit-quest-data/`.
+
+Na Vercel, configure `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` com as credenciais do mesmo banco Upstash Redis para compartilhar questões e pareceres. Os perfis do jogo servem à simulação e não autenticam usuários. Use dados fictícios em uma instância pública.
+
+O botão **DEV** permite navegar entre pisos e testar portas e o parecer sem alterar o progresso da partida normal.
+
+## Código
+
+O projeto usa Next.js, React, TypeScript e Tailwind CSS. O mapa e a movimentação são renderizados em Canvas.
+
+- `src/data/` reúne o banco de questões e a descrição dos níveis.
+- `src/game/` contém mapas, diálogos, movimentação e renderização.
+- `src/components/` reúne o quiz, o dossiê, o parecer e o painel.
+- `src/app/api/` fornece as rotas de questões e pareceres.

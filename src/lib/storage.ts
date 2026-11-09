@@ -1,14 +1,13 @@
 import { Question, PlayerStats, UserProfile, FinalEvaluation } from '../types/game';
 import { INITIAL_QUESTIONS } from '../data/defaultQuestions';
 
-const QUESTIONS_KEY = 'audit_quest_questions_v3';
 const STATS_KEY = 'audit_quest_stats_v3';
 const USER_KEY = 'audit_quest_user_v3';
 const EVALUATIONS_KEY = 'audit_quest_evaluations_v3';
 
 export const INITIAL_PLAYER_STATS: PlayerStats = {
   score: 0,
-  maxScore: 1200,
+  maxScore: INITIAL_QUESTIONS.reduce((total, question) => total + question.points, 0),
   answers: [],
   evidences: [],
   currentLevel: 1,
@@ -16,128 +15,104 @@ export const INITIAL_PLAYER_STATS: PlayerStats = {
   visitedNodes: [],
 };
 
-// ================= QUESTION CRUD =================
-export function getQuestions(): Question[] {
-  if (typeof window === 'undefined') return INITIAL_QUESTIONS;
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, { cache: 'no-store', ...init });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || 'O servidor não conseguiu concluir a operação.');
+  return body;
+}
+
+export function getQuestions(): Promise<Question[]> {
+  return requestJson('/api/questions');
+}
+
+export function saveQuestion(question: Question): Promise<Question> {
+  return requestJson('/api/questions', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(question),
+  });
+}
+
+export function resetQuestionsToDefault(): Promise<Question[]> {
+  return requestJson('/api/questions', { method: 'POST' });
+}
+
+export function getPlayerStats(userId: string, migrateLegacy = false): PlayerStats {
   try {
-    const raw = localStorage.getItem(QUESTIONS_KEY);
-    if (!raw) {
-      localStorage.setItem(QUESTIONS_KEY, JSON.stringify(INITIAL_QUESTIONS));
-      return INITIAL_QUESTIONS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_QUESTIONS;
-  } catch (e) {
-    console.error('Error loading questions:', e);
-    return INITIAL_QUESTIONS;
-  }
-}
-
-export function saveQuestion(question: Question): Question[] {
-  const current = getQuestions();
-  const index = current.findIndex(q => q.id === question.id);
-  let updated: Question[];
-  if (index >= 0) {
-    updated = [...current];
-    updated[index] = question;
-  } else {
-    updated = [...current, question];
-  }
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(QUESTIONS_KEY, JSON.stringify(updated));
-  }
-  return updated;
-}
-
-export function deleteQuestion(questionId: string): Question[] {
-  const current = getQuestions();
-  const updated = current.filter(q => q.id !== questionId);
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(QUESTIONS_KEY, JSON.stringify(updated));
-  }
-  return updated;
-}
-
-export function resetQuestionsToDefault(): Question[] {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(QUESTIONS_KEY, JSON.stringify(INITIAL_QUESTIONS));
-  }
-  return INITIAL_QUESTIONS;
-}
-
-// ================= PLAYER PROGRESS =================
-export function getPlayerStats(): PlayerStats {
-  if (typeof window === 'undefined') return INITIAL_PLAYER_STATS;
-  try {
-    const raw = localStorage.getItem(STATS_KEY);
-    if (!raw) return INITIAL_PLAYER_STATS;
-    return JSON.parse(raw);
+    const key = `${STATS_KEY}:${userId}`;
+    const raw = localStorage.getItem(key) ?? (migrateLegacy ? localStorage.getItem(STATS_KEY) : null);
+    const previous: PlayerStats = raw ? JSON.parse(raw) : INITIAL_PLAYER_STATS;
+    const answers = INITIAL_QUESTIONS.flatMap(question => {
+      const answer = previous.answers.find(item => item.questionId === question.id);
+      return answer ? [{ ...answer, pointsEarned: Math.min(answer.pointsEarned, question.points) }] : [];
+    });
+    const completedLevels = previous.completedLevels.filter(level =>
+      INITIAL_QUESTIONS.filter(question => question.levelNumber <= level)
+        .every(question => answers.some(answer => answer.questionId === question.id && answer.isCorrect))
+    );
+    const stats = {
+      ...previous,
+      runId: previous.runId ?? crypto.randomUUID(),
+      answers,
+      completedLevels,
+      currentLevel: Math.min(previous.currentLevel, completedLevels.includes(2) ? 3 : completedLevels.includes(1) ? 2 : 1),
+      maxScore: INITIAL_PLAYER_STATS.maxScore,
+      score: answers.reduce((total, answer) => total + answer.pointsEarned, 0),
+    };
+    savePlayerStats(userId, stats);
+    if (migrateLegacy) localStorage.removeItem(STATS_KEY);
+    return stats;
   } catch {
-    return INITIAL_PLAYER_STATS;
+    return { ...INITIAL_PLAYER_STATS, runId: crypto.randomUUID() };
   }
 }
 
-export function savePlayerStats(stats: PlayerStats): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-  }
+export function savePlayerStats(userId: string, stats: PlayerStats): void {
+  localStorage.setItem(`${STATS_KEY}:${userId}`, JSON.stringify(stats));
 }
 
-export function resetPlayerStats(): PlayerStats {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STATS_KEY, JSON.stringify(INITIAL_PLAYER_STATS));
-  }
-  return INITIAL_PLAYER_STATS;
+export function resetPlayerStats(userId: string): PlayerStats {
+  const fresh = { ...INITIAL_PLAYER_STATS, runId: crypto.randomUUID() };
+  savePlayerStats(userId, fresh);
+  return fresh;
 }
 
-// ================= USER PROFILE & AUTH =================
 export function getCurrentUser(): UserProfile | null {
-  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(USER_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
 export function setCurrentUser(user: UserProfile | null): void {
-  if (typeof window !== 'undefined') {
-    if (user) {
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(USER_KEY);
-    }
+  if (user) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(STATS_KEY);
   }
 }
 
-// ================= FINAL EVALUATIONS / REPORTS =================
 export function getEvaluations(): FinalEvaluation[] {
-  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(EVALUATIONS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-export function saveEvaluation(evaluation: FinalEvaluation): void {
-  if (typeof window === 'undefined') return;
-  const current = getEvaluations();
-  const updated = [evaluation, ...current.filter(e => e.id !== evaluation.id)];
-  localStorage.setItem(EVALUATIONS_KEY, JSON.stringify(updated));
+export function getSharedEvaluations(): Promise<FinalEvaluation[]> {
+  return requestJson('/api/evaluations');
+}
 
-  // Sync to API route asynchronously for teacher/server access
-  try {
-    fetch('/api/evaluations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(evaluation),
-    }).catch(() => {});
-  } catch {
-    // Graceful offline fallback
-  }
+export async function saveEvaluation(evaluation: FinalEvaluation): Promise<void> {
+  await requestJson('/api/evaluations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(evaluation),
+  });
 }

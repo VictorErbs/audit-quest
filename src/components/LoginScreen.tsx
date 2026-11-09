@@ -20,7 +20,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onOpen
     e.preventDefault();
     const finalName = name.trim() || (role === 'TEACHER' ? 'Prof. Auditor Chefe' : 'Estudante de Contábeis');
     const user: UserProfile = {
-      id: 'usr-' + Date.now(),
+      id: `${role}:${(registration.trim() || finalName).toLocaleLowerCase('pt-BR')}`,
       name: finalName,
       email: `${finalName.toLowerCase().replace(/\s+/g, '')}@auditquest.edu`,
       role,
@@ -34,7 +34,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onOpen
 
   const handleQuickPlay = () => {
     const user: UserProfile = {
-      id: 'guest-' + Date.now(),
+      id: 'guest-' + crypto.randomUUID(),
       name: 'Fiscal ' + Math.floor(100 + Math.random() * 900),
       email: 'fiscal@investigacao.gov.br',
       role: 'STUDENT',

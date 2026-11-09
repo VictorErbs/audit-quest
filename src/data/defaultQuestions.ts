@@ -1,6 +1,8 @@
 import { Question } from '../types/game';
+import { QUALITY_QUESTIONS } from './qualityQuestions';
 
 export const INITIAL_QUESTIONS: Question[] = [
+  ...QUALITY_QUESTIONS,
   // =========================================================================
   // NÍVEL 1 (FÁCIL) — CONCENTRAÇÃO DE MERCADO & FOCO DOS REGULADORES
   // Fonte: Crepaldi, Silvio Aparecido. Auditoria Contábil, Item 4.10, pág. 149

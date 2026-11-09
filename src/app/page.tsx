@@ -13,18 +13,22 @@ import { Question, QuestionOption, PlayerStats, UserProfile } from '../types/gam
 import { InteractiveNode, MAPS } from '../game/engine/tileMaps';
 import {
   getQuestions,
+  INITIAL_PLAYER_STATS,
   getPlayerStats,
   savePlayerStats,
   resetPlayerStats,
   getCurrentUser,
   setCurrentUser,
 } from '../lib/storage';
-import { LEVEL_METADATA } from '../data/defaultQuestions';
+import { INITIAL_QUESTIONS } from '../data/defaultQuestions';
 import { retroAudio } from '../lib/audio';
 
 export default function HomePage() {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [stats, setStats] = useState<PlayerStats | null>(null);
+  const [questions, setQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
+  const [savedStats, setSavedStats] = useState<PlayerStats | null>(null);
+  const [devStats, setDevStats] = useState<PlayerStats | null>(null);
+  const [questionsOffline, setQuestionsOffline] = useState(false);
+  const stats = devStats ?? savedStats;
   const [user, setUser] = useState<UserProfile | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -38,13 +42,16 @@ export default function HomePage() {
 
   // Load state on mount
   useEffect(() => {
-    setQuestions(getQuestions());
-    setStats(getPlayerStats());
-    setUser(getCurrentUser());
-    setIsInitialized(true);
+    const currentUser = getCurrentUser();
+    setUser(currentUser);
+    if (currentUser) setSavedStats(getPlayerStats(currentUser.id, true));
+    getQuestions()
+      .then(setQuestions)
+      .catch(() => setQuestionsOffline(true))
+      .finally(() => setIsInitialized(true));
   }, []);
 
-  if (!isInitialized || !stats) {
+  if (!isInitialized) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-amber-400 font-pixel text-sm">
         Carregando Audit Quest...
@@ -53,23 +60,38 @@ export default function HomePage() {
   }
 
   // FIRST: If no user is logged in, show the full login screen!
-  if (!user) {
+  if (!user || !stats) {
     return (
       <>
         <LoginScreen
-          onLoginSuccess={(newUser) => setUser(newUser)}
+          onLoginSuccess={(newUser) => {
+            setSavedStats(getPlayerStats(newUser.id));
+            setUser(newUser);
+          }}
           onOpenAdmin={() => setShowAdminCrud(true)}
         />
         {showAdminCrud && (
           <AdminCrud
             questions={questions}
-            onQuestionsUpdated={(updated) => setQuestions(updated)}
+            onQuestionsUpdated={(updated) => { setQuestions(updated); setQuestionsOffline(false); }}
             onClose={() => setShowAdminCrud(false)}
           />
         )}
       </>
     );
   }
+
+  const canSubmitReport = !devStats && stats.completedLevels.includes(3)
+    && questions.every(q => stats.answers.some(answer => answer.questionId === q.id && answer.isCorrect));
+
+  const updateStats = (updated: PlayerStats) => {
+    if (devStats) {
+      setDevStats(updated);
+    } else {
+      setSavedStats(updated);
+      savePlayerStats(user.id, updated);
+    }
+  };
 
   // Answer handler with retry support for learning & unlocking doors
   const handleAnswerQuestion = (option: QuestionOption) => {
@@ -121,20 +143,21 @@ export default function HomePage() {
       evidences: newEvidences,
     };
 
-    setStats(updatedStats);
-    savePlayerStats(updatedStats);
+    updateStats(updatedStats);
   };
 
   // Level progression
   const handleLevelComplete = (nextLevel: number) => {
+    if (!devStats && !questions.filter(q => q.levelNumber <= stats.currentLevel)
+      .every(q => stats.answers.some(answer => answer.questionId === q.id && answer.isCorrect))) return;
+
     const completed = Array.from(new Set([...stats.completedLevels, stats.currentLevel]));
     if (nextLevel > 3 || !MAPS[nextLevel]) {
       const updatedStats: PlayerStats = {
         ...stats,
         completedLevels: completed,
       };
-      setStats(updatedStats);
-      savePlayerStats(updatedStats);
+      updateStats(updatedStats);
       setShowFinalReport(true);
       return;
     }
@@ -144,24 +167,23 @@ export default function HomePage() {
       currentLevel: nextLevel,
       completedLevels: completed,
     };
-    setStats(updatedStats);
-    savePlayerStats(updatedStats);
+    updateStats(updatedStats);
   };
 
   const handleSelectLevel = (lvl: number) => {
+    if (!devStats) return;
     retroAudio.playBlip();
     const updatedStats: PlayerStats = {
       ...stats,
       currentLevel: lvl,
     };
-    setStats(updatedStats);
-    savePlayerStats(updatedStats);
+    setDevStats(updatedStats);
   };
 
   const handleRestart = () => {
     if (confirm('Deseja reiniciar a investigação desde o piso inicial?')) {
-      const fresh = resetPlayerStats();
-      setStats(fresh);
+      if (devStats) setDevStats({ ...INITIAL_PLAYER_STATS, runId: devStats.runId });
+      else setSavedStats(resetPlayerStats(user.id));
       setShowFinalReport(false);
       retroAudio.playBlip();
     }
@@ -175,6 +197,8 @@ export default function HomePage() {
   const handleLogout = () => {
     setCurrentUser(null);
     setUser(null);
+    setSavedStats(null);
+    setDevStats(null);
   };
 
   return (
@@ -192,11 +216,17 @@ export default function HomePage() {
         onTriggerDialogue={(npc) => setActiveDialogueNode(npc)}
         onLevelComplete={handleLevelComplete}
         onOpenDossier={() => setShowDossier(true)}
-        onOpenFinalReport={() => setShowFinalReport(true)}
+        devMode={!!devStats}
+        onToggleDev={() => setDevStats(devStats ? null : savedStats)}
         onOpenAdmin={() => setShowAdminCrud(true)}
         onLogout={handleLogout}
         onSelectLevel={handleSelectLevel}
       />
+      {questionsOffline && (
+        <p role="status" className="absolute top-14 left-3 z-30 bg-slate-900 px-3 py-2 text-xs text-amber-300">
+          Banco compartilhado indisponível. Partida com as questões padrão.
+        </p>
+      )}
 
       {/* Interactive Modals Over Game */}
       {activeQuestion && (
@@ -220,15 +250,16 @@ export default function HomePage() {
           stats={stats}
           questions={questions}
           onClose={() => setShowDossier(false)}
-          onOpenFinalReport={() => setShowFinalReport(true)}
+          onOpenFinalReport={canSubmitReport ? () => setShowFinalReport(true) : undefined}
         />
       )}
 
-      {showFinalReport && (
+      {showFinalReport && (canSubmitReport || devStats) && (
         <FinalReportModal
           stats={stats}
           questions={questions}
           user={user}
+          preview={!!devStats}
           onClose={() => setShowFinalReport(false)}
           onRestart={handleRestart}
         />
@@ -237,7 +268,7 @@ export default function HomePage() {
       {showAdminCrud && (
         <AdminCrud
           questions={questions}
-          onQuestionsUpdated={(updated) => setQuestions(updated)}
+          onQuestionsUpdated={(updated) => { setQuestions(updated); setQuestionsOffline(false); }}
           onClose={() => setShowAdminCrud(false)}
         />
       )}
