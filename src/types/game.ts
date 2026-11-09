@@ -35,7 +35,6 @@ export interface Evidence {
 }
 
 export interface PlayerStats {
-  runId?: string;
   score: number;
   maxScore: number;
   answers: {
@@ -54,7 +53,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  role: 'STUDENT' | 'TEACHER' | 'GUEST';
+  role: 'STUDENT' | 'TEACHER';
   createdAt: number;
 }
 

@@ -1,60 +1,106 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { BlobPreconditionFailedError, get, list, put } from '@vercel/blob';
+import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-type Collection = 'questions' | 'evaluations';
+const localWrites = new Map<string, Promise<unknown>>();
 
-async function redis(command: string[]): Promise<unknown> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) throw new Error('Configure as credenciais do Redis.');
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
-    cache: 'no-store',
-    signal: AbortSignal.timeout(8000),
-  });
-  const { result, error } = await response.json();
-  if (!response.ok || error) throw new Error('Falha ao acessar o Redis.');
-  return result;
+function useBlob() {
+  return Boolean(process.env.VERCEL || process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 }
 
-function usesRedis() {
-  return Boolean(process.env.VERCEL || process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN);
+function pathname(key: string) {
+  return `audit-quest/${process.env.VERCEL_ENV ?? 'development'}/${key}.json`;
 }
 
-function localFile(collection: Collection) {
-  return join(process.cwd(), '.audit-quest-data', `${collection}.json`);
+function localPath(key: string) {
+  return join(process.cwd(), '.audit-quest-data', 'v4', `${key}.json`);
 }
 
-function readLocal(collection: Collection): Record<string, string> {
+function isMissing(error: unknown) {
+  return (error as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
+async function read<T>(key: string): Promise<{ value: T; etag?: string } | null> {
+  if (useBlob()) {
+    const result = await get(pathname(key), { access: 'private', useCache: false });
+    if (!result) return null;
+    if (result.statusCode !== 200) throw new Error('Resposta inesperada do Blob.');
+    return { value: await new Response(result.stream).json() as T, etag: result.blob.etag };
+  }
   try {
-    return JSON.parse(readFileSync(localFile(collection), 'utf8'));
+    return { value: JSON.parse(await readFile(localPath(key), 'utf8')) as T };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    if (isMissing(error)) return null;
     throw error;
   }
 }
 
-export async function readRecords<T>(collection: Collection): Promise<T[]> {
-  const values = usesRedis()
-    ? await redis(['HVALS', `audit-quest:${collection}`]) as string[]
-    : Object.values(readLocal(collection));
-  return values.map(value => JSON.parse(value) as T);
+export async function readRecord<T>(key: string): Promise<T | null> {
+  return (await read<T>(key))?.value ?? null;
 }
 
-export async function writeRecords<T extends { id: string }>(collection: Collection, records: T[]) {
-  const entries = records.map(record => [record.id, JSON.stringify(record)]);
-  if (usesRedis()) {
-    await redis(['HSET', `audit-quest:${collection}`, ...entries.flat()]);
-    return;
+export async function updateRecord<T>(key: string, update: (value: T | null) => T): Promise<T> {
+  if (useBlob()) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await read<T>(key);
+      const next = update(current?.value ?? null);
+      if (current && next === current.value) return next;
+      try {
+        await put(pathname(key), JSON.stringify(next), {
+          access: 'private',
+          contentType: 'application/json',
+          addRandomSuffix: false,
+          allowOverwrite: Boolean(current),
+          ifMatch: current?.etag,
+        });
+        return next;
+      } catch (error) {
+        // A simultaneous first write may create the pathname before this request.
+        if (!(error instanceof BlobPreconditionFailedError) &&
+          (current || !(await read<T>(key)))) throw error;
+      }
+    }
+    throw new Error('O registro está ocupado. Tente novamente.');
   }
 
-  mkdirSync(join(process.cwd(), '.audit-quest-data'), { recursive: true });
-  const path = localFile(collection);
-  const temporaryPath = `${path}.${randomUUID()}.tmp`;
-  writeFileSync(temporaryPath, JSON.stringify({ ...readLocal(collection), ...Object.fromEntries(entries) }));
-  renameSync(temporaryPath, path);
+  const pending = (localWrites.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    const current = await readRecord<T>(key);
+    const next = update(current);
+    if (next === current) return next;
+    const file = localPath(key);
+    await mkdir(dirname(file), { recursive: true });
+    const temporary = `${file}.${randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify(next), { mode: 0o600 });
+    await rename(temporary, file);
+    return next;
+  });
+  localWrites.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (localWrites.get(key) === pending) localWrites.delete(key);
+  }
+}
+
+export async function listReports<T extends object>(cursor?: string): Promise<{ records: T[]; cursor?: string }> {
+  if (useBlob()) {
+    const page = await list({ prefix: pathname('reports/').replace(/\.json$/, ''), limit: 25, cursor });
+    const records = await Promise.all(page.blobs.map(async blob => {
+      const result = await get(blob.pathname, { access: 'private', useCache: false });
+      return result?.statusCode === 200 ? await new Response(result.stream).json() as T : null;
+    }));
+    return { records: records.flatMap(record => record === null ? [] : [record]), cursor: page.cursor };
+  }
+  let files: string[];
+  try {
+    files = await readdir(join(process.cwd(), '.audit-quest-data', 'v4', 'reports'));
+  } catch (error) {
+    if (isMissing(error)) return { records: [] as T[], cursor: undefined };
+    throw error;
+  }
+  const start = cursor ? Number(cursor) : 0;
+  const paths = files.filter(file => file.endsWith('.json')).sort();
+  const records = await Promise.all(paths.slice(start, start + 25).map(file => readRecord<T>(`reports/${file.slice(0, -5)}`)));
+  return { records: records.flatMap(record => record === null ? [] : [record]), cursor: start + 25 < paths.length ? String(start + 25) : undefined };
 }

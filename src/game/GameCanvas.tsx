@@ -5,7 +5,7 @@ import { MAPS, MapData, InteractiveNode } from './engine/tileMaps';
 import { SpriteRenderer, Direction } from './engine/spriteRenderer';
 import { retroAudio } from '../lib/audio';
 import { Question, PlayerStats, UserProfile } from '../types/game';
-import { LEVEL_METADATA } from '../data/defaultQuestions';
+import { LEVEL_METADATA } from '../data/levels';
 import {
   Maximize,
   Minimize,
@@ -13,7 +13,6 @@ import {
   VolumeX,
   Briefcase,
   Award,
-  Settings,
   LogOut,
   ChevronRight,
   Gamepad2,
@@ -31,11 +30,8 @@ interface GameCanvasProps {
   onTriggerDialogue: (npc: InteractiveNode) => void;
   onLevelComplete: (nextLevel: number) => void;
   onOpenDossier: () => void;
-  devMode: boolean;
-  onToggleDev: () => void;
-  onOpenAdmin: () => void;
+  onOpenRanking: () => void;
   onLogout: () => void;
-  onSelectLevel: (lvl: number) => void;
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -50,11 +46,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onTriggerDialogue,
   onLevelComplete,
   onOpenDossier,
-  devMode,
-  onToggleDev,
-  onOpenAdmin,
+  onOpenRanking,
   onLogout,
-  onSelectLevel,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -113,12 +106,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Check if door is unlocked (Dev Mode unlocks all doors immediately)
   const isDoorUnlocked = useCallback((node: InteractiveNode): boolean => {
-    if (devMode) return true;
     if (!node.requiresQuestionIds || node.requiresQuestionIds.length === 0) return true;
     return node.requiresQuestionIds.every(qid => 
       stats.answers.some(a => a.questionId === qid && a.isCorrect)
     );
-  }, [stats.answers, devMode]);
+  }, [stats.answers]);
 
   // Check tile walkability
   const isWalkable = useCallback((gx: number, gy: number): boolean => {
@@ -421,23 +413,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           </div>
         </div>
 
-        {/* Level Quick Select Dropdown/Buttons */}
-        {devMode && <div className="absolute top-full left-3 mt-2 flex items-center gap-1">
-          {LEVEL_METADATA.map(m => (
-            <button
-              key={m.level}
-              onClick={() => onSelectLevel(m.level)}
-              className={`px-2 py-0.5 rounded text-[10px] font-mono transition ${
-                currentLevel === m.level
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-              }`}
-            >
-              {`N${m.level}`}
-            </button>
-          ))}
-        </div>}
-
         {/* Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Points */}
@@ -473,30 +448,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-amber-400" /> : <Maximize className="w-3.5 h-3.5 text-amber-400" />}
           </button>
 
-          {/* Dev Mode Toggle */}
-          <button
-            onClick={() => {
-              onToggleDev();
-              retroAudio.playBlip();
-            }}
-            className={`px-2 py-1 rounded text-[10px] font-pixel transition border flex items-center gap-1 shrink-0 ${
-              devMode
-                ? 'bg-purple-600 text-white border-purple-400 shadow-pixel'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-            }`}
-            title="Alternar Modo Desenvolvedor (desbloqueia todas as portas e elevadores para testes)"
-          >
-            <span>🛠️</span>
-            <span className="hidden sm:inline">{devMode ? 'DEV: ON' : 'DEV'}</span>
-          </button>
-
-          {/* Teacher CRUD */}
-          <button
-            onClick={onOpenAdmin}
-            className="bg-slate-800 hover:bg-slate-700 text-amber-400 p-1.5 rounded border border-slate-700 transition"
-            title="Painel Docente / CRUD"
-          >
-            <Settings className="w-3.5 h-3.5" />
+          <button onClick={onOpenRanking}
+            className="rounded border border-slate-700 bg-slate-800 p-1.5 text-amber-400 hover:bg-slate-700"
+            title="Ranking" aria-label="Ranking">
+            <Award className="w-3.5 h-3.5" />
           </button>
 
           {/* Logout */}

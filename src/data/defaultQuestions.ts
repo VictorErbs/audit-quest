@@ -253,35 +253,4 @@ export const INITIAL_QUESTIONS: Question[] = [
   }
 ];
 
-export const LEVEL_METADATA = [
-  {
-    level: 1,
-    title: 'Nível 1: Concentração e Foco Regulatório',
-    subtitle: 'Dificuldade: Fácil | Foco dos Reguladores & Big Four (Item 4.10)',
-    color: 'blue',
-    icon: 'Building2',
-    category: 'CONCENTRACAO' as const,
-    description: 'Investigue as medidas de transparência buscadas pelos reguladores internacionais e a concentração das 4 maiores firmas no Brasil e no mundo.',
-    badge: 'Fácil (Item 4.10, p.149)',
-  },
-  {
-    level: 2,
-    title: 'Nível 2: As Quatro Áreas de Divulgação',
-    subtitle: 'Dificuldade: Médio | Divisão em 4 Grupos e Áreas Aceitas (Item 4.10)',
-    color: 'amber',
-    icon: 'Users',
-    category: 'DIVULGACAO' as const,
-    description: 'Analise a divisão temática de informações e compreenda quais grupos as firmas de auditoria não veem problemas em divulgar.',
-    badge: 'Médio (Item 4.10, p.150)',
-  },
-  {
-    level: 3,
-    title: 'Nível 3: Resistência e Risco Sistêmico',
-    subtitle: 'Dificuldade: Difícil | Resistência Financeira e Risco de Oferta (Item 4.10)',
-    color: 'crimson',
-    icon: 'ShieldAlert',
-    category: 'RESISTENCIA_RISCO' as const,
-    description: 'Investigue as informações com maior resistência (balanço próprio, litígios e processos) e o risco de escassez de oferta de auditoria.',
-    badge: 'Difícil (Item 4.10, p.150)',
-  },
-];
+export { LEVEL_METADATA } from './levels';

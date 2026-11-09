@@ -9,7 +9,7 @@ import { FileText, AlertTriangle, CheckCircle2, XCircle, BookOpen, ArrowRight } 
 interface QuizModalProps {
   question: Question;
   isAlreadyAnswered: boolean;
-  onAnswer: (option: QuestionOption) => void;
+  onAnswer: (option: QuestionOption) => Promise<QuestionOption & { tip: string; pointsEarned: number }>;
   onClose: () => void;
 }
 
@@ -19,26 +19,32 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onAnswer,
   onClose,
 }) => {
-  const [selectedOption, setSelectedOption] = useState<QuestionOption | null>(null);
-  const [showFeedback, setShowFeedback] = useState<boolean>(false);
+  const [selectedOption, setSelectedOption] = useState<(QuestionOption & { tip: string; pointsEarned: number }) | null>(null);
+  const [error, setError] = useState('');
+  const pending = React.useRef(false);
+  const [busy, setBusy] = useState(false);
+  const showFeedback = selectedOption !== null;
 
-  const handleSelect = (opt: QuestionOption) => {
-    if (showFeedback) return;
-    setSelectedOption(opt);
-    setShowFeedback(true);
-
-    if (opt.isCorrect) {
-      retroAudio.playCorrect();
-      confetti({
-        particleCount: 50,
-        spread: 60,
-        origin: { y: 0.6 }
-      });
-    } else {
-      retroAudio.playWrong();
+  const handleSelect = async (option: QuestionOption) => {
+    if (showFeedback || pending.current || isAlreadyAnswered) return;
+    pending.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await onAnswer(option);
+      setSelectedOption(result);
+      if (result.isCorrect) {
+        retroAudio.playCorrect();
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+      } else {
+        retroAudio.playWrong();
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível registrar a resposta.');
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
-
-    onAnswer(opt);
   };
 
   // Keyboard navigation: SPACE to confirm/close, 1-4/A-D to answer, ESC to cancel
@@ -60,14 +66,14 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           if (question.options[3]) handleSelect(question.options[3]);
         }
       }
-      if (e.code === 'Escape') {
+      if (e.code === 'Escape' && !pending.current) {
         onClose();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showFeedback, question.options, onClose]);
+  }, [showFeedback, question.options, onClose, onAnswer, isAlreadyAnswered]);
 
   const getDocBadgeColor = (type: string) => {
     switch (type) {
@@ -127,9 +133,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               
               let btnStyle = "bg-slate-800/90 border-slate-700 hover:border-amber-400 hover:bg-slate-700/80 text-slate-200";
               if (showFeedback) {
-                if (opt.isCorrect) {
+                if (isSelected && selectedOption?.isCorrect) {
                   btnStyle = "bg-emerald-950/80 border-emerald-500 text-emerald-100 ring-2 ring-emerald-500/50";
-                } else if (isSelected && !opt.isCorrect) {
+                } else if (isSelected && !selectedOption?.isCorrect) {
                   btnStyle = "bg-rose-950/80 border-rose-500 text-rose-100 ring-2 ring-rose-500/50";
                 } else {
                   btnStyle = "bg-slate-800/40 border-slate-800 text-slate-500 opacity-60";
@@ -139,7 +145,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               return (
                 <button
                   key={opt.id}
-                  disabled={showFeedback}
+                  disabled={showFeedback || busy || isAlreadyAnswered}
                   onClick={() => handleSelect(opt)}
                   className={`w-full text-left p-3.5 rounded-lg border-2 transition-all flex items-start gap-3 text-sm ${btnStyle}`}
                 >
@@ -147,10 +153,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                     {letter}
                   </span>
                   <span className="flex-1 leading-snug">{opt.text}</span>
-                  {showFeedback && opt.isCorrect && (
+                  {showFeedback && isSelected && selectedOption?.isCorrect && (
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                   )}
-                  {showFeedback && isSelected && !opt.isCorrect && (
+                  {showFeedback && isSelected && !selectedOption?.isCorrect && (
                     <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
                   )}
                 </button>
@@ -158,6 +164,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             })}
           </div>
 
+          {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
           {/* Didactic Feedback Box (shown after answering) */}
           {showFeedback && selectedOption && (
             <div className={`p-4 rounded-lg border-2 animate-fade-in ${
@@ -169,7 +176,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 {selectedOption.isCorrect ? (
                   <>
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                    <span>CORRETO! Evidência comprovada. (+{question.points} PTS)</span>
+                    <span>CORRETO! Evidência comprovada. (+{selectedOption.pointsEarned} PTS)</span>
                   </>
                 ) : (
                   <>
@@ -188,7 +195,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 <BookOpen className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
                 <div>
                   <span className="font-bold text-white">Fundamentação Normativa:</span> {question.normReference}
-                  <div className="text-slate-400 text-[11px] mt-0.5">{question.didacticTip}</div>
+                  <div className="text-slate-400 text-[11px] mt-0.5">{selectedOption.tip}</div>
                 </div>
               </div>
             </div>
@@ -214,6 +221,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             ) : (
               <button
                 onClick={onClose}
+                disabled={busy}
                 className="text-slate-400 hover:text-white px-3 py-2 text-xs font-mono"
               >
                 Fechar [ESC]

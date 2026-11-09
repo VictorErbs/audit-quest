@@ -23,22 +23,52 @@ Converse com os personagens, explore os pontos marcados com curiosidades e respo
 
 ## Executar localmente
 
-Com Node.js e npm instalados, abra um terminal na pasta do projeto:
+Use Node.js 22 ou superior. Crie um arquivo `.env.local` com uma chave
+aleatória de pelo menos 32 caracteres em `AUDIT_SESSION_SECRET` e um código
+de professor aleatório de pelo menos 16 caracteres em `AUDIT_TEACHER_CODE`.
+Gere valores independentes, por exemplo executando duas vezes
+`node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
 
-~~~bash
+```bash
 npm ci
 npm run dev
-~~~
+```
 
-Abra [localhost:3000](http://localhost:3000) no navegador. Use a mesma matrícula no mesmo navegador para retomar o progresso. Para verificar as questões e os mapas, execute `npx tsx verify-check.ts`. Para gerar a versão de produção, use `npm run build`.
+Abra [localhost:3000](http://localhost:3000). Cada aluno cria sua conta com
+nome, matrícula, e-mail e senha. O acesso usa matrícula e senha. A partida
+é salva no servidor e pode ser retomada em outro navegador. Depois de
+enviar o parecer, o aluno pode consultar o ranking, mas não pode responder
+novamente. As 50 melhores notas aparecem para usuários autenticados. Em
+caso de empate, tem prioridade quem concluiu primeiro.
 
-## Painel e armazenamento
+O professor entra pela opção **Professor** e pode editar a campanha e
+consultar os pareceres. Alterações nas perguntas só afetam partidas que
+ainda não registraram a primeira resposta. A correção, os pontos e o
+bloqueio de nova partida são aplicados no servidor. Para verificar as
+questões e os mapas, execute `npx tsx verify-check.ts`. Para gerar a versão
+de produção, execute `npm run build`.
 
-O painel permite editar as questões da campanha e consultar os pareceres enviados. O progresso individual fica no navegador. Em desenvolvimento, o servidor guarda as edições e os pareceres em `.audit-quest-data/`.
+## Vercel e armazenamento
 
-Na Vercel, configure `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` com as credenciais do mesmo banco Upstash Redis para compartilhar questões e pareceres. Os perfis do jogo servem à simulação e não autenticam usuários. Use dados fictícios em uma instância pública.
+Em desenvolvimento sem Blob, o servidor grava em `.audit-quest-data/v4/`.
+Na Vercel, conecte um **Vercel Blob privado** e disponibilize
+`BLOB_READ_WRITE_TOKEN` ao projeto. As chaves separam Preview e Production
+por prefixo. Configure `AUDIT_SESSION_SECRET` e `AUDIT_TEACHER_CODE` em cada
+ambiente, com valores diferentes. Não coloque segredos no Git. Contas,
+partidas e relatórios ficam no Blob privado. A senha é armazenada como hash
+scrypt com salt. O ranking divulga nome e pontuação, sem e-mail ou matrícula.
 
-O botão **DEV** permite navegar entre pisos e testar portas e o parecer sem alterar o progresso da partida normal.
+Para restringir o cadastro a uma turma, configure `AUDIT_ROSTER_JSON` com
+um objeto que associa a matrícula normalizada ao e-mail em minúsculas,
+por exemplo `{"2026001":"aluna@example.com"}`. Sem essa configuração, uma
+pessoa pode se cadastrar usando outra matrícula. O formulário valida o
+formato do e-mail, sem enviar confirmação de titularidade. Aplique limites
+de requisição ao endpoint `POST /api/session` no Firewall da Vercel antes
+de abrir o cadastro ao público.
+
+Os registros antigos do Redis não são importados. As questões padrão e
+seus gabaritos fazem parte do código fonte. Para avaliação formal, use
+perguntas cujo gabarito não esteja disponível aos alunos.
 
 ## Código
 

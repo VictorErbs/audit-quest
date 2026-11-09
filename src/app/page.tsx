@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GameCanvas } from '../game/GameCanvas';
 import { LoginScreen } from '../components/LoginScreen';
 import { QuizModal } from '../components/QuizModal';
@@ -8,270 +8,135 @@ import { DialogueModal } from '../components/DialogueModal';
 import { EvidenceDossier } from '../components/EvidenceDossier';
 import { FinalReportModal } from '../components/FinalReportModal';
 import { AdminCrud } from '../components/AdminCrud';
-
-import { Question, QuestionOption, PlayerStats, UserProfile } from '../types/game';
-import { InteractiveNode, MAPS } from '../game/engine/tileMaps';
-import {
-  getQuestions,
-  INITIAL_PLAYER_STATS,
-  getPlayerStats,
-  savePlayerStats,
-  resetPlayerStats,
-  getCurrentUser,
-  setCurrentUser,
-} from '../lib/storage';
-import { INITIAL_QUESTIONS } from '../data/defaultQuestions';
+import { Ranking } from '../components/Ranking';
+import type { FinalEvaluation, Question, QuestionOption, PlayerStats, UserProfile } from '../types/game';
+import type { InteractiveNode } from '../game/engine/tileMaps';
+import { getQuestions, getRun, getSession, requestJson, submitAnswer } from '../lib/storage';
 import { retroAudio } from '../lib/audio';
 
+function allCorrect(questions: Question[], answers: PlayerStats['answers']) {
+  return questions.length > 0 && questions.every(q => answers.some(answer => answer.questionId === q.id && answer.isCorrect));
+}
+
+function buildStats(questions: Question[], answers: PlayerStats['answers']): PlayerStats {
+  const completedLevels = [1, 2].filter(level => allCorrect(questions.filter(q => q.levelNumber === level), answers));
+  return {
+    answers, completedLevels, visitedNodes: [],
+    currentLevel: completedLevels.length + 1,
+    score: answers.reduce((total, answer) => total + answer.pointsEarned, 0),
+    maxScore: questions.reduce((total, q) => total + q.points, 0),
+    evidences: questions.filter(q => answers.some(answer => answer.questionId === q.id && answer.isCorrect)).map(q => ({
+      questionId: q.id, title: q.title, documentType: q.documentType, collectedAt: Date.now(),
+      category: q.category, summary: q.scenario,
+    })),
+  };
+}
+
 export default function HomePage() {
-  const [questions, setQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
-  const [savedStats, setSavedStats] = useState<PlayerStats | null>(null);
-  const [devStats, setDevStats] = useState<PlayerStats | null>(null);
-  const [questionsOffline, setQuestionsOffline] = useState(false);
-  const stats = devStats ?? savedStats;
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [stats, setStats] = useState<PlayerStats | null>(null);
+  const [report, setReport] = useState<FinalEvaluation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [audioEnabled, setAudioEnabled] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Active Modals
   const [activeQuestion, setActiveQuestion] = useState<Question | null>(null);
-  const [activeDialogueNode, setActiveDialogueNode] = useState<InteractiveNode | null>(null);
+  const [dialogue, setDialogue] = useState<InteractiveNode | null>(null);
   const [showDossier, setShowDossier] = useState(false);
-  const [showFinalReport, setShowFinalReport] = useState(false);
-  const [showAdminCrud, setShowAdminCrud] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [showRanking, setShowRanking] = useState(false);
 
-  // Load state on mount
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    setUser(currentUser);
-    if (currentUser) setSavedStats(getPlayerStats(currentUser.id, true));
-    getQuestions()
-      .then(setQuestions)
-      .catch(() => setQuestionsOffline(true))
-      .finally(() => setIsInitialized(true));
-  }, []);
-
-  if (!isInitialized) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-amber-400 font-pixel text-sm">
-        Carregando Audit Quest...
-      </div>
-    );
+  async function load(currentUser?: UserProfile) {
+    setLoading(true);
+    setError('');
+    try {
+      const profile = currentUser ?? (await getSession()).user;
+      setUser(profile);
+      if (profile?.role === 'TEACHER') {
+        setQuestions(await getQuestions());
+      } else if (profile) {
+        const run = await getRun();
+        setQuestions(run.questions);
+        setStats(buildStats(run.questions, run.answers));
+        setReport(run.report);
+      }
+    } catch {
+      setError('Não foi possível carregar o Audit Quest. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // FIRST: If no user is logged in, show the full login screen!
-  if (!user || !stats) {
-    return (
-      <>
-        <LoginScreen
-          onLoginSuccess={(newUser) => {
-            setSavedStats(getPlayerStats(newUser.id));
-            setUser(newUser);
-          }}
-          onOpenAdmin={() => setShowAdminCrud(true)}
-        />
-        {showAdminCrud && (
-          <AdminCrud
-            questions={questions}
-            onQuestionsUpdated={(updated) => { setQuestions(updated); setQuestionsOffline(false); }}
-            onClose={() => setShowAdminCrud(false)}
-          />
-        )}
-      </>
-    );
+  useEffect(() => { void load(); }, []);
+
+  async function logout() {
+    try {
+      await requestJson('/api/session', { method: 'DELETE' });
+      window.location.reload();
+    } catch {
+      setError('Não foi possível sair. Tente novamente.');
+    }
   }
 
-  const canSubmitReport = !devStats && stats.completedLevels.includes(3)
-    && questions.every(q => stats.answers.some(answer => answer.questionId === q.id && answer.isCorrect));
+  if (loading || error) return (
+    <main className="grid min-h-screen place-content-center gap-4 bg-slate-950 px-4 text-center text-amber-300">
+      {loading ? <p role="status">Carregando Audit Quest…</p> : <>
+        <p role="alert">{error}</p>
+        <button className="underline" onClick={() => void load()}>Tentar novamente</button>
+        {user && <button className="underline" onClick={() => void logout()}>Sair</button>}
+      </>}
+    </main>
+  );
 
-  const updateStats = (updated: PlayerStats) => {
-    if (devStats) {
-      setDevStats(updated);
-    } else {
-      setSavedStats(updated);
-      savePlayerStats(user.id, updated);
-    }
-  };
+  if (!user) return <LoginScreen onLoginSuccess={profile => void load(profile)} />;
 
-  // Answer handler with retry support for learning & unlocking doors
-  const handleAnswerQuestion = (option: QuestionOption) => {
-    if (!activeQuestion) return;
+  if (user.role === 'TEACHER') return (
+    <AdminCrud questions={questions} onQuestionsUpdated={setQuestions} onClose={() => void logout()} />
+  );
 
-    const existingIdx = stats.answers.findIndex(a => a.questionId === activeQuestion.id);
-    const prevAnswer = existingIdx >= 0 ? stats.answers[existingIdx] : null;
+  if (report && !showReport) return <Ranking finished onClose={() => void logout()} />;
+  if (!stats) return null;
 
-    // If already correctly answered, no need to overwrite
-    if (prevAnswer && prevAnswer.isCorrect) return;
-
-    // Award points (full points on first attempt; 50% on retry to encourage learning)
-    const basePoints = prevAnswer ? Math.round(activeQuestion.points * 0.5) : activeQuestion.points;
-    const pointsEarned = option.isCorrect ? basePoints : 0;
-
-    const newAnswerObj = {
-      questionId: activeQuestion.id,
-      optionId: option.id,
-      isCorrect: option.isCorrect,
-      pointsEarned,
-    };
-
-    let newAnswers = [...stats.answers];
-    if (existingIdx >= 0) {
-      newAnswers[existingIdx] = newAnswerObj;
-    } else {
-      newAnswers.push(newAnswerObj);
-    }
-
-    const alreadyHasEvidence = stats.evidences.some(e => e.questionId === activeQuestion.id);
-    const newEvidences = (option.isCorrect && !alreadyHasEvidence)
-      ? [
-          ...stats.evidences,
-          {
-            questionId: activeQuestion.id,
-            title: activeQuestion.title,
-            documentType: activeQuestion.documentType,
-            collectedAt: Date.now(),
-            category: activeQuestion.category,
-            summary: activeQuestion.scenario,
-          },
-        ]
-      : stats.evidences;
-
-    const updatedStats: PlayerStats = {
-      ...stats,
-      score: stats.score + pointsEarned,
-      answers: newAnswers,
-      evidences: newEvidences,
-    };
-
-    updateStats(updatedStats);
-  };
-
-  // Level progression
-  const handleLevelComplete = (nextLevel: number) => {
-    if (!devStats && !questions.filter(q => q.levelNumber <= stats.currentLevel)
-      .every(q => stats.answers.some(answer => answer.questionId === q.id && answer.isCorrect))) return;
-
-    const completed = Array.from(new Set([...stats.completedLevels, stats.currentLevel]));
-    if (nextLevel > 3 || !MAPS[nextLevel]) {
-      const updatedStats: PlayerStats = {
-        ...stats,
-        completedLevels: completed,
-      };
-      updateStats(updatedStats);
-      setShowFinalReport(true);
-      return;
-    }
-
-    const updatedStats: PlayerStats = {
-      ...stats,
-      currentLevel: nextLevel,
-      completedLevels: completed,
-    };
-    updateStats(updatedStats);
-  };
-
-  const handleSelectLevel = (lvl: number) => {
-    if (!devStats) return;
-    retroAudio.playBlip();
-    const updatedStats: PlayerStats = {
-      ...stats,
-      currentLevel: lvl,
-    };
-    setDevStats(updatedStats);
-  };
-
-  const handleRestart = () => {
-    if (confirm('Deseja reiniciar a investigação desde o piso inicial?')) {
-      if (devStats) setDevStats({ ...INITIAL_PLAYER_STATS, runId: devStats.runId });
-      else setSavedStats(resetPlayerStats(user.id));
-      setShowFinalReport(false);
-      retroAudio.playBlip();
-    }
-  };
-
-  const handleToggleAudio = () => {
-    retroAudio.enabled = !audioEnabled;
-    setAudioEnabled(!audioEnabled);
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setUser(null);
-    setSavedStats(null);
-    setDevStats(null);
+  const canSubmit = allCorrect(questions, stats.answers);
+  const handleAnswer = async (option: QuestionOption) => {
+    if (!activeQuestion) throw new Error('Abra um terminal.');
+    const answer = await submitAnswer(activeQuestion.id, option.id);
+    setStats(previous => {
+      if (!previous) return previous;
+      const answers = [...previous.answers.filter(item => item.questionId !== answer.questionId), answer];
+      return { ...buildStats(questions, answers), currentLevel: previous.currentLevel, completedLevels: previous.completedLevels };
+    });
+    return { ...option, id: answer.optionId, isCorrect: answer.isCorrect,
+      explanation: answer.explanation, tip: answer.tip, pointsEarned: answer.pointsEarned };
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 flex flex-col relative">
-      {/* Immersive Game Canvas Arena */}
+    <main className="relative flex h-screen w-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
       <GameCanvas
-        currentLevel={stats.currentLevel}
-        stats={stats}
-        questions={questions}
-        user={user}
+        currentLevel={stats.currentLevel} stats={stats} questions={questions} user={user}
         audioEnabled={audioEnabled}
-        isModalOpen={!!activeQuestion || !!activeDialogueNode || showDossier || showFinalReport || showAdminCrud}
-        onToggleAudio={handleToggleAudio}
-        onTriggerQuestion={(q) => setActiveQuestion(q)}
-        onTriggerDialogue={(npc) => setActiveDialogueNode(npc)}
-        onLevelComplete={handleLevelComplete}
+        isModalOpen={!!activeQuestion || !!dialogue || showDossier || showReport || showRanking}
+        onToggleAudio={() => { retroAudio.enabled = !audioEnabled; setAudioEnabled(!audioEnabled); }}
+        onTriggerQuestion={setActiveQuestion} onTriggerDialogue={setDialogue}
+        onLevelComplete={nextLevel => {
+          if (!allCorrect(questions.filter(q => q.levelNumber <= stats.currentLevel), stats.answers)) return;
+          if (nextLevel > 3) setShowReport(true);
+          else setStats({ ...stats, currentLevel: nextLevel, completedLevels: Array.from(new Set([...stats.completedLevels, stats.currentLevel])) });
+        }}
         onOpenDossier={() => setShowDossier(true)}
-        devMode={!!devStats}
-        onToggleDev={() => setDevStats(devStats ? null : savedStats)}
-        onOpenAdmin={() => setShowAdminCrud(true)}
-        onLogout={handleLogout}
-        onSelectLevel={handleSelectLevel}
+        onOpenRanking={() => setShowRanking(true)}
+        onLogout={() => void logout()}
       />
-      {questionsOffline && (
-        <p role="status" className="absolute top-14 left-3 z-30 bg-slate-900 px-3 py-2 text-xs text-amber-300">
-          Banco compartilhado indisponível. Partida com as questões padrão.
-        </p>
-      )}
-
-      {/* Interactive Modals Over Game */}
-      {activeQuestion && (
-        <QuizModal
-          question={activeQuestion}
-          isAlreadyAnswered={stats.answers.some(a => a.questionId === activeQuestion.id && a.isCorrect)}
-          onAnswer={handleAnswerQuestion}
-          onClose={() => setActiveQuestion(null)}
-        />
-      )}
-
-      {activeDialogueNode && (
-        <DialogueModal
-          node={activeDialogueNode}
-          onClose={() => setActiveDialogueNode(null)}
-        />
-      )}
-
-      {showDossier && (
-        <EvidenceDossier
-          stats={stats}
-          questions={questions}
-          onClose={() => setShowDossier(false)}
-          onOpenFinalReport={canSubmitReport ? () => setShowFinalReport(true) : undefined}
-        />
-      )}
-
-      {showFinalReport && (canSubmitReport || devStats) && (
-        <FinalReportModal
-          stats={stats}
-          questions={questions}
-          user={user}
-          preview={!!devStats}
-          onClose={() => setShowFinalReport(false)}
-          onRestart={handleRestart}
-        />
-      )}
-
-      {showAdminCrud && (
-        <AdminCrud
-          questions={questions}
-          onQuestionsUpdated={(updated) => { setQuestions(updated); setQuestionsOffline(false); }}
-          onClose={() => setShowAdminCrud(false)}
-        />
-      )}
-    </div>
+      {activeQuestion && <QuizModal question={activeQuestion}
+        isAlreadyAnswered={stats.answers.some(a => a.questionId === activeQuestion.id && a.isCorrect)}
+        onAnswer={handleAnswer} onClose={() => setActiveQuestion(null)} />}
+      {dialogue && <DialogueModal node={dialogue} onClose={() => setDialogue(null)} />}
+      {showDossier && <EvidenceDossier stats={stats} questions={questions}
+        onClose={() => setShowDossier(false)}
+        onOpenFinalReport={canSubmit ? () => { setShowDossier(false); setShowReport(true); } : undefined} />}
+      {showReport && canSubmit && <FinalReportModal stats={stats} questions={questions}
+        onClose={() => setShowReport(false)} onSubmitted={setReport} />}
+      {showRanking && <Ranking onClose={() => setShowRanking(false)} />}
+    </main>
   );
 }

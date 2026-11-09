@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Question, FinalEvaluation } from '../types/game';
-import { saveQuestion, resetQuestionsToDefault, getEvaluations, getSharedEvaluations } from '../lib/storage';
+import { saveQuestion, resetQuestionsToDefault, getSharedEvaluations } from '../lib/storage';
 import { Edit2, RotateCcw, X, Check, BookOpen, Users, Award, Shield } from 'lucide-react';
 
 interface AdminCrudProps {
@@ -46,14 +46,8 @@ export const AdminCrud: React.FC<AdminCrudProps> = ({
   const [evaluations, setEvaluations] = useState<FinalEvaluation[]>([]);
 
   useEffect(() => {
-    const local = getEvaluations();
-    setEvaluations(local);
-
     getSharedEvaluations()
-      .then(serverData => {
-        const merged = new Map([...local, ...serverData].map(item => [item.id, item]));
-        setEvaluations(Array.from(merged.values()).sort((a, b) => b.submittedAt - a.submittedAt));
-      })
+      .then(setEvaluations)
       .catch(() => setEvaluationError(true));
   }, []);
 

@@ -1,28 +1,24 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PlayerStats, Question, FinalEvaluation, UserProfile, Category } from '../types/game';
+import { PlayerStats, Question, FinalEvaluation, Category } from '../types/game';
 import { saveEvaluation } from '../lib/storage';
 import { retroAudio } from '../lib/audio';
 import confetti from 'canvas-confetti';
-import { Award, ShieldAlert, CheckCircle, FileCheck2, Printer, RotateCcw } from 'lucide-react';
+import { Award, ShieldAlert, CheckCircle, FileCheck2, Printer } from 'lucide-react';
 
 interface FinalReportModalProps {
   stats: PlayerStats;
   questions: Question[];
-  user: UserProfile | null;
-  preview: boolean;
   onClose: () => void;
-  onRestart: () => void;
+  onSubmitted: (report: FinalEvaluation) => void;
 }
 
 export const FinalReportModal: React.FC<FinalReportModalProps> = ({
   stats,
   questions,
-  user,
-  preview,
   onClose,
-  onRestart,
+  onSubmitted,
 }) => {
   const [decision, setDecision] = useState<FinalEvaluation['regulatoryDecision']>('MULTA_PESADA');
   const [rationale, setRationale] = useState('');
@@ -32,13 +28,13 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') {
+      if (e.code === 'Escape' && !saving) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, saving]);
 
   // Categories corresponding to the 3 levels of Theme 4.10
   const categories: { key: Category; label: string }[] = [
@@ -74,25 +70,12 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving || !stats.runId) return;
-    const evaluation: FinalEvaluation = {
-      id: stats.runId,
-      userId: user?.id || 'guest',
-      userName: user?.name || 'Estudante de Contábeis',
-      totalScore: stats.score,
-      maxScore: totalPossiblePoints,
-      percentage,
-      rankTitle,
-      regulatoryDecision: decision,
-      studentRationale: rationale || 'Constatada forte resistência na divulgação de informações financeiras e processos disciplinares, além de risco de escassez de oferta de auditoria para grandes corporações segundo o Item 4.10.',
-      categoryBreakdown: breakdown,
-      submittedAt: Date.now(),
-    };
+    if (saving) return;
 
     setSaving(true);
     setSaveError('');
     try {
-      if (!preview) await saveEvaluation(evaluation);
+      onSubmitted(await saveEvaluation(decision, rationale));
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Falha ao enviar. Tente novamente.');
       return;
@@ -214,14 +197,14 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-lg font-pixel text-xs tracking-wider shadow-pixel transition transform active:scale-95 flex items-center justify-center gap-2"
               >
                 <FileCheck2 className="w-5 h-5" />
-                <span>{saving ? 'Arquivando…' : preview ? 'Simular envio (DEV)' : 'Assinar e Lavrar Relatório Regulatório Final'}</span>
+                <span>{saving ? 'Arquivando…' : 'Assinar e Lavrar Relatório Regulatório Final'}</span>
               </button>
             </form>
           ) : (
             <div className="bg-emerald-950/40 border-2 border-emerald-600 p-4 rounded-lg space-y-3">
               <div className="flex items-center gap-2 text-emerald-400 font-bold font-mono text-sm">
                 <CheckCircle className="w-5 h-5" />
-                {preview ? 'ENVIO SIMULADO (DEV)' : 'RELATÓRIO LAVRADO E REGISTRADO COM SUCESSO!'}
+                RELATÓRIO LAVRADO E REGISTRADO COM SUCESSO!
               </div>
               <div className="text-xs font-mono text-slate-300">
                 <span className="font-bold text-white">Deliberação Regulatória:</span> {decision}
@@ -243,20 +226,15 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
               <Printer className="w-4 h-4" />
               <span>Imprimir / Salvar PDF</span>
             </button>
-            <button
-              onClick={onRestart}
-              className="bg-slate-700 hover:bg-slate-600 text-amber-300 px-3 py-2 rounded text-xs font-mono flex items-center gap-1.5 transition"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Reiniciar do Piso 1</span>
-            </button>
+
           </div>
 
           <button
             onClick={onClose}
+            disabled={saving}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2 rounded text-xs font-pixel shadow-pixel transition"
           >
-            Concluir
+            {submitted ? 'Ver ranking' : 'Voltar'}
           </button>
         </div>
       </div>

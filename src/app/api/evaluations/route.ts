@@ -1,29 +1,56 @@
-import { NextResponse } from 'next/server';
-import { readRecords, writeRecords } from '@/lib/serverStore';
-import { FinalEvaluation } from '@/types/game';
+import { decisions, rankTitle, type Run } from '@/lib/campaign';
+import { getSession, json } from '@/lib/session';
+import { listReports, updateRecord } from '@/lib/serverStore';
+import type { FinalEvaluation } from '@/types/game';
 
-export const dynamic = 'force-dynamic';
-
-export async function GET() {
+export async function GET(request: Request) {
+  if (getSession(request)?.role !== 'TEACHER') return json({ error: 'Acesso restrito a professores.' }, 403);
+  const cursor = new URL(request.url).searchParams.get('cursor') ?? undefined;
   try {
-    const evaluations = await readRecords<FinalEvaluation>('evaluations');
-    return NextResponse.json(evaluations.sort((a, b) => b.submittedAt - a.submittedAt));
+    return json(await listReports<FinalEvaluation>(cursor));
   } catch {
-    return NextResponse.json({ error: 'Relatórios compartilhados indisponíveis.' }, { status: 503 });
+    return json({ error: 'Relatórios indisponíveis.' }, 503);
   }
 }
 
 export async function POST(request: Request) {
-  const evaluation: FinalEvaluation | null = await request.json().catch(() => null);
-  if (!evaluation?.id || !evaluation.userId || !evaluation.userName || !evaluation.categoryBreakdown
-    || !Number.isFinite(evaluation.submittedAt)) {
-    return NextResponse.json({ error: 'Relatório inválido.' }, { status: 400 });
+  const user = getSession(request);
+  if (user?.role !== 'STUDENT') return json({ error: 'Apenas alunos podem registrar resultados.' }, 403);
+  const body = await request.json().catch(() => null);
+  const rationale = typeof body?.studentRationale === 'string' ? body.studentRationale.trim() : '';
+  if (!decisions.includes(body?.regulatoryDecision) || !rationale || rationale.length > 4000) {
+    return json({ error: 'Informe a decisão e uma justificativa de até 4.000 caracteres.' }, 400);
   }
-
   try {
-    await writeRecords('evaluations', [evaluation]);
-    return NextResponse.json({ success: true });
+    const run = await updateRecord<Run | null>(`runs/${user.id}`, current => {
+      if (!current || current.report || !current.questions.every(q =>
+        current.answers.some(answer => answer.questionId === q.id && answer.isCorrect))) return current;
+      const categoryBreakdown: FinalEvaluation['categoryBreakdown'] = {
+        CONCENTRACAO: { correct: 0, total: 0, score: 0 },
+        DIVULGACAO: { correct: 0, total: 0, score: 0 },
+        RESISTENCIA_RISCO: { correct: 0, total: 0, score: 0 },
+      };
+      for (const q of current.questions) {
+        const category = categoryBreakdown[q.category];
+        category.total++;
+        category.correct++;
+        category.score += current.answers.find(answer => answer.questionId === q.id)!.pointsEarned;
+      }
+      const maxScore = current.questions.reduce((total, q) => total + q.points, 0);
+      const totalScore = current.answers.reduce((total, answer) => total + answer.pointsEarned, 0);
+      const percentage = Math.round(totalScore / maxScore * 100);
+      const report: FinalEvaluation = {
+        id: user.id, userId: user.id, userName: user.name, maxScore, totalScore, percentage,
+        rankTitle: rankTitle(percentage), regulatoryDecision: body.regulatoryDecision,
+        studentRationale: rationale, categoryBreakdown, submittedAt: Date.now(),
+      };
+      return { ...current, report };
+    });
+    if (!run?.report) return json({ error: 'Conclua todas as questões antes de enviar o parecer.' }, 409);
+    const report = run.report;
+    await updateRecord<FinalEvaluation>(`reports/${user.id}`, existing => existing ?? report);
+    return json(report);
   } catch {
-    return NextResponse.json({ error: 'Não foi possível arquivar o relatório.' }, { status: 503 });
+    return json({ error: 'Falha ao arquivar o parecer. Tente novamente.' }, 503);
   }
 }

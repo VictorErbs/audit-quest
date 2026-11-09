@@ -1,57 +1,53 @@
-import { NextResponse } from 'next/server';
+import { campaign, publicQuestions } from '@/lib/campaign';
+import { getSession, json } from '@/lib/session';
 import { INITIAL_QUESTIONS } from '@/data/defaultQuestions';
-import { readRecords, writeRecords } from '@/lib/serverStore';
-import { Question } from '@/types/game';
+import { updateRecord } from '@/lib/serverStore';
+import type { Question } from '@/types/game';
 
-export const dynamic = 'force-dynamic';
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const saved = await readRecords<Question>('questions');
-    return NextResponse.json(INITIAL_QUESTIONS.map(question =>
-      saved.find(item => item.id === question.id) ?? question
-    ));
+    const questions = await campaign();
+    return json(getSession(request)?.role === 'TEACHER' ? questions : publicQuestions(questions));
   } catch {
-    return NextResponse.json({ error: 'Banco de questões indisponível.' }, { status: 503 });
+    return json({ error: 'Banco de questões indisponível.' }, 503);
   }
+}
+
+function text(value: unknown, limit: number): value is string {
+  return typeof value === 'string' && value.length <= limit;
 }
 
 export async function PUT(request: Request) {
-  const question: Question | null = await request.json().catch(() => null);
-  const original = INITIAL_QUESTIONS.find(item => item.id === question?.id);
-  if (!original || !question
-    || typeof question.title !== 'string' || !question.title.trim()
-    || typeof question.prompt !== 'string' || !question.prompt.trim()
-    || !Array.isArray(question.options) || question.options.length < 2
-    || question.options.some(option => typeof option?.id !== 'string'
-      || typeof option.text !== 'string' || !option.text.trim()
-      || typeof option.isCorrect !== 'boolean')
-    || new Set(question.options.map(option => option.id)).size !== question.options.length
-    || question.options.filter(option => option.isCorrect).length !== 1) {
-    return NextResponse.json({ error: 'Preencha o título, o enunciado e as alternativas e marque uma resposta correta.' }, { status: 400 });
+  if (getSession(request)?.role !== 'TEACHER') return json({ error: 'Acesso restrito a professores.' }, 403);
+  const q = await request.json().catch(() => null);
+  const original = INITIAL_QUESTIONS.find(item => item.id === q?.id);
+  if (!original || !text(q.title, 160) || !q.title.trim() || !text(q.prompt, 5000) || !q.prompt.trim() ||
+      !text(q.scenario, 3000) || !text(q.normReference, 500) || !text(q.didacticTip, 1500) ||
+      !['RELATORIO', 'PARECER', 'PLANILHA', 'MEMORANDO', 'DOSSIE'].includes(q.documentType) ||
+      !Array.isArray(q.options) || q.options.length < 2 || q.options.length > 8 ||
+      q.options.some((option: Question['options'][number]) => !text(option?.id, 80) || !option.id ||
+        !text(option.text, 2000) || !option.text.trim() || typeof option.isCorrect !== 'boolean' || !text(option.explanation, 2000)) ||
+      new Set(q.options.map((option: Question['options'][number]) => option.id)).size !== q.options.length ||
+      q.options.filter((option: Question['options'][number]) => option.isCorrect).length !== 1) {
+    return json({ error: 'Preencha os campos e marque uma única alternativa correta.' }, 400);
   }
-
-  const updated = {
-    ...question,
-    levelNumber: original.levelNumber,
-    category: original.category,
-    difficulty: original.difficulty,
-    points: original.points,
-  };
-
+  const { title, prompt, scenario, normReference, didacticTip, documentType, options } = q;
+  const updated: Question = { ...original, title, prompt, scenario, normReference, didacticTip, documentType,
+    options: options.map(({ id, text, isCorrect, explanation }: Question['options'][number]) => ({ id, text, isCorrect, explanation })) };
   try {
-    await writeRecords('questions', [updated]);
-    return NextResponse.json(updated);
+    await updateRecord<Question[]>('questions', existing => (existing ?? []).filter(item => item.id !== updated.id).concat(updated));
+    return json(updated);
   } catch {
-    return NextResponse.json({ error: 'Não foi possível salvar a questão compartilhada.' }, { status: 503 });
+    return json({ error: 'Não foi possível salvar a questão.' }, 503);
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  if (getSession(request)?.role !== 'TEACHER') return json({ error: 'Acesso restrito a professores.' }, 403);
   try {
-    await writeRecords('questions', INITIAL_QUESTIONS);
-    return NextResponse.json(INITIAL_QUESTIONS);
+    await updateRecord<Question[]>('questions', () => []);
+    return json(INITIAL_QUESTIONS);
   } catch {
-    return NextResponse.json({ error: 'Não foi possível restaurar as questões.' }, { status: 503 });
+    return json({ error: 'Não foi possível restaurar as questões.' }, 503);
   }
 }
