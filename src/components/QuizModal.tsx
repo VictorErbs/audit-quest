@@ -20,18 +20,25 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onClose,
 }) => {
   const [selectedOption, setSelectedOption] = useState<(QuestionOption & { tip: string; pointsEarned: number }) | null>(null);
+  const [pendingOption, setPendingOption] = useState<QuestionOption | null>(null);
   const [error, setError] = useState('');
   const pending = React.useRef(false);
   const [busy, setBusy] = useState(false);
   const showFeedback = selectedOption !== null;
 
-  const handleSelect = async (option: QuestionOption) => {
-    if (showFeedback || pending.current || isAlreadyAnswered) return;
+  const handleSelect = (option: QuestionOption) => {
+    if (showFeedback || busy || isAlreadyAnswered) return;
+    setPendingOption(option);
+    setError('');
+  };
+
+  const handleConfirm = async () => {
+    if (!pendingOption || showFeedback || pending.current || isAlreadyAnswered) return;
     pending.current = true;
     setBusy(true);
     setError('');
     try {
-      const result = await onAnswer(option);
+      const result = await onAnswer(pendingOption);
       setSelectedOption(result);
       if (result.isCorrect) {
         retroAudio.playCorrect();
@@ -66,6 +73,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           if (question.options[3]) handleSelect(question.options[3]);
         }
       }
+      if ((e.code === 'Enter' || e.code === 'Space') && pendingOption && !showFeedback) {
+        e.preventDefault();
+        void handleConfirm();
+      }
       if (e.code === 'Escape' && !pending.current) {
         onClose();
       }
@@ -73,7 +84,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showFeedback, question.options, onClose, onAnswer, isAlreadyAnswered]);
+  }, [showFeedback, question.options, onClose, onAnswer, isAlreadyAnswered, pendingOption]);
 
   const getDocBadgeColor = (type: string) => {
     switch (type) {
@@ -129,7 +140,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           <div className="space-y-2.5 pt-1">
             {question.options.map((opt, idx) => {
               const letter = String.fromCharCode(65 + idx);
-              const isSelected = selectedOption?.id === opt.id;
+              const isSelected = (selectedOption?.id ?? pendingOption?.id) === opt.id;
               
               let btnStyle = "bg-slate-800/90 border-slate-700 hover:border-amber-400 hover:bg-slate-700/80 text-slate-200";
               if (showFeedback) {
@@ -153,6 +164,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                     {letter}
                   </span>
                   <span className="flex-1 leading-snug">{opt.text}</span>
+                  {isSelected && !showFeedback && <span className="shrink-0 text-amber-300">✓</span>}
                   {showFeedback && isSelected && selectedOption?.isCorrect && (
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                   )}
@@ -218,6 +230,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               >
                 <span>Adicionar ao Dossiê [ ␣ ESPAÇO ]</span>
                 <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : pendingOption ? (
+              <button type="button" onClick={() => void handleConfirm()} disabled={busy}
+                className="min-h-12 touch-manipulation rounded-lg bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-60">
+                {busy ? 'Enviando resposta…' : 'Confirmar resposta'}
               </button>
             ) : (
               <button
